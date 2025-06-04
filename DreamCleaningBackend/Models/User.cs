@@ -26,6 +26,9 @@ namespace DreamCleaningBackend.Models
         [StringLength(20)]
         public string? Phone { get; set; }
 
+        // User role - defaults to Customer (0)
+        public UserRole Role { get; set; } = UserRole.Customer;
+
         // Refresh token for JWT
         public string? RefreshToken { get; set; }
         public DateTime? RefreshTokenExpiryTime { get; set; }

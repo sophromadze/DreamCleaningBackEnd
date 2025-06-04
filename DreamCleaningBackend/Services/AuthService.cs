@@ -263,15 +263,16 @@ namespace DreamCleaningBackend.Services
         private string CreateToken(User user)
         {
             var claims = new List<Claim>
-            {
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Email, user.Email),
-                new Claim(ClaimTypes.Name, $"{user.FirstName} {user.LastName}"),
-                new Claim("FirstName", user.FirstName),
-                new Claim("LastName", user.LastName),
-                new Claim("FirstTimeOrder", user.FirstTimeOrder.ToString()),
-                new Claim("AuthProvider", user.AuthProvider ?? "Local")
-            };
+    {
+        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+        new Claim(ClaimTypes.Email, user.Email),
+        new Claim(ClaimTypes.Name, $"{user.FirstName} {user.LastName}"),
+        new Claim(ClaimTypes.Role, user.Role.ToString()),
+        new Claim("FirstName", user.FirstName),
+        new Claim("LastName", user.LastName),
+        new Claim("FirstTimeOrder", user.FirstTimeOrder.ToString()),
+        new Claim("AuthProvider", user.AuthProvider ?? "Local")
+    };
 
             if (user.SubscriptionId.HasValue)
             {
@@ -345,7 +346,8 @@ namespace DreamCleaningBackend.Services
                 Phone = user.Phone,
                 FirstTimeOrder = user.FirstTimeOrder,
                 SubscriptionId = user.SubscriptionId,
-                AuthProvider = user.AuthProvider
+                AuthProvider = user.AuthProvider,
+                Role = user.Role.ToString()
             };
         }
     }
