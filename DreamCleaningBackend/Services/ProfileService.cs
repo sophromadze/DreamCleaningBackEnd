@@ -62,11 +62,10 @@ namespace DreamCleaningBackend.Services
             {
                 Name = createApartmentDto.Name,
                 Address = createApartmentDto.Address,
+                AptSuite = createApartmentDto.AptSuite,
                 City = createApartmentDto.City,
+                State = createApartmentDto.State,
                 PostalCode = createApartmentDto.PostalCode,
-                NumberOfRooms = createApartmentDto.NumberOfRooms,
-                NumberOfBathrooms = createApartmentDto.NumberOfBathrooms,
-                SquareMeters = createApartmentDto.SquareMeters,
                 SpecialInstructions = createApartmentDto.SpecialInstructions,
                 UserId = userId,
                 CreatedAt = DateTime.UtcNow,
@@ -91,11 +90,10 @@ namespace DreamCleaningBackend.Services
 
             apartment.Name = apartmentDto.Name;
             apartment.Address = apartmentDto.Address;
+            apartment.AptSuite = apartmentDto.AptSuite;
             apartment.City = apartmentDto.City;
+            apartment.State = apartmentDto.State;
             apartment.PostalCode = apartmentDto.PostalCode;
-            apartment.NumberOfRooms = apartmentDto.NumberOfRooms;
-            apartment.NumberOfBathrooms = apartmentDto.NumberOfBathrooms;
-            apartment.SquareMeters = apartmentDto.SquareMeters;
             apartment.SpecialInstructions = apartmentDto.SpecialInstructions;
             apartment.UpdatedAt = DateTime.UtcNow;
 
@@ -148,11 +146,10 @@ namespace DreamCleaningBackend.Services
                 Id = apartment.Id,
                 Name = apartment.Name,
                 Address = apartment.Address,
+                AptSuite = apartment.AptSuite,
                 City = apartment.City,
+                State = apartment.State,
                 PostalCode = apartment.PostalCode,
-                NumberOfRooms = apartment.NumberOfRooms,
-                NumberOfBathrooms = apartment.NumberOfBathrooms,
-                SquareMeters = apartment.SquareMeters,
                 SpecialInstructions = apartment.SpecialInstructions
             };
         }
