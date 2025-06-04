@@ -58,8 +58,7 @@ namespace DreamCleaningBackend.DTOs
 
         public string? PromoCode { get; set; }
 
-        [Required]
-        [Range(10, double.MaxValue, ErrorMessage = "Tips must be at least $10")]
+        [Range(0, double.MaxValue)]
         public decimal Tips { get; set; }
     }
 }
