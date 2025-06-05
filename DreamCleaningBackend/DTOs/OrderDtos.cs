@@ -47,6 +47,7 @@ namespace DreamCleaningBackend.DTOs
         public int Quantity { get; set; }
         public decimal Cost { get; set; }
         public int Duration { get; set; }
+        public decimal PriceMultiplier { get; set; }
     }
 
     public class OrderExtraServiceDto

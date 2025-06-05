@@ -258,8 +258,139 @@ namespace DreamCleaningBackend.Controllers
                 };
 
                 // Calculate pricing (simplified for now)
+                // Calculate pricing
                 decimal subTotal = serviceType.BasePrice;
                 int totalDuration = 0;
+
+                // Check for deep cleaning multipliers first
+                decimal priceMultiplier = 1.0m;
+                bool hasDeepCleaning = false;
+                bool hasSuperDeepCleaning = false;
+
+                foreach (var extraServiceDto in dto.ExtraServices)
+                {
+                    var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
+                    if (extraService != null)
+                    {
+                        if (extraService.IsSuperDeepCleaning)
+                        {
+                            hasSuperDeepCleaning = true;
+                            priceMultiplier = extraService.PriceMultiplier;
+                            break; // Super deep cleaning takes precedence
+                        }
+                        else if (extraService.IsDeepCleaning)
+                        {
+                            hasDeepCleaning = true;
+                            priceMultiplier = extraService.PriceMultiplier;
+                        }
+                    }
+                }
+
+                // Add services
+                foreach (var serviceDto in dto.Services)
+                {
+                    var service = await _context.Services.FindAsync(serviceDto.ServiceId);
+                    if (service != null)
+                    {
+                        decimal serviceCost = 0;
+                        int serviceDuration = 0;
+
+                        // Special handling for office cleaning
+                        if (service.ServiceKey == "cleaners" && serviceType.Name == "Office Cleaning")
+                        {
+                            // Find the hours service
+                            var hoursServiceDto = dto.Services.FirstOrDefault(s =>
+                            {
+                                var svc = _context.Services.Find(s.ServiceId);
+                                return svc?.ServiceKey == "hours";
+                            });
+
+                            if (hoursServiceDto != null)
+                            {
+                                var hours = hoursServiceDto.Quantity;
+                                var cleaners = serviceDto.Quantity;
+                                var costPerCleanerPerHour = service.Cost * priceMultiplier;
+                                serviceCost = costPerCleanerPerHour * cleaners * hours;
+                                serviceDuration = hours * 60; // Convert to minutes
+                            }
+                        }
+                        else if (service.ServiceKey == "bedrooms" && serviceDto.Quantity == 0)
+                        {
+                            // Studio apartment - flat rate
+                            serviceCost = 20 * priceMultiplier;
+                            serviceDuration = 20; // 20 minutes for studio
+                        }
+                        else if (service.ServiceKey != "hours")
+                        {
+                            // Regular service calculation
+                            serviceCost = service.Cost * serviceDto.Quantity * priceMultiplier;
+                            serviceDuration = service.TimeDuration * serviceDto.Quantity;
+                        }
+
+                        if (service.ServiceKey != "hours" || serviceType.Name != "Office Cleaning")
+                        {
+                            var orderService = new OrderService
+                            {
+                                ServiceId = serviceDto.ServiceId,
+                                Quantity = serviceDto.Quantity,
+                                Cost = serviceCost,
+                                Duration = serviceDuration,
+                                PriceMultiplier = priceMultiplier,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            order.OrderServices.Add(orderService);
+                            subTotal += serviceCost;
+                            totalDuration += serviceDuration;
+                        }
+                    }
+                }
+
+                // Add extra services
+                foreach (var extraServiceDto in dto.ExtraServices)
+                {
+                    var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
+                    if (extraService != null)
+                    {
+                        decimal cost = 0;
+
+                        // Don't add cost for deep cleaning services as they affect the multiplier
+                        if (!extraService.IsDeepCleaning && !extraService.IsSuperDeepCleaning)
+                        {
+                            if (extraService.HasHours && extraServiceDto.Hours > 0)
+                            {
+                                cost = extraService.Price * extraServiceDto.Hours;
+                            }
+                            else if (extraService.HasQuantity && extraServiceDto.Quantity > 0)
+                            {
+                                cost = extraService.Price * extraServiceDto.Quantity;
+                            }
+                            else if (!extraService.HasHours && !extraService.HasQuantity)
+                            {
+                                cost = extraService.Price;
+                            }
+                        }
+                        // For deep cleaning services, the cost is their base price (they provide multiplier effect)
+                        else
+                        {
+                            cost = extraService.Price;
+                        }
+
+                        var orderExtraService = new OrderExtraService
+                        {
+                            ExtraServiceId = extraServiceDto.ExtraServiceId,
+                            Quantity = extraServiceDto.Quantity,
+                            Hours = extraServiceDto.Hours,
+                            Cost = cost,
+                            Duration = extraService.Duration,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        order.OrderExtraServices.Add(orderExtraService);
+
+                        // Add the extra service cost to subtotal
+                        subTotal += cost;
+                        totalDuration += orderExtraService.Duration;
+                    }
+                }
 
                 // Add services
                 foreach (var serviceDto in dto.Services)

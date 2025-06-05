@@ -314,8 +314,8 @@ namespace DreamCleaningBackend.Services
             // Calculate the difference
             var additionalAmount = newTotal - order.Total;
 
-            // Return 0 if the amount would be negative (can't reduce the order total)
-            return additionalAmount > 0 ? additionalAmount : 0;
+            // Return the actual difference (can be negative if reducing services)
+            return additionalAmount;
         }
 
         public async Task<bool> MarkOrderAsDone(int orderId)
