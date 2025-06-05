@@ -25,14 +25,32 @@ namespace DreamCleaningBackend.Controllers
         {
             var serviceTypes = await _context.ServiceTypes
                 .Include(st => st.Services)
-                .Include(st => st.ExtraServices)
                 .OrderBy(st => st.DisplayOrder)
-                .Select(st => new ServiceTypeDto
+                .ToListAsync();
+
+            // Get all extra services that are available for all
+            var universalExtraServices = await _context.ExtraServices
+                .Where(es => es.IsAvailableForAll && es.ServiceTypeId == null)
+                .OrderBy(es => es.DisplayOrder)
+                .ToListAsync();
+
+            var result = new List<ServiceTypeDto>();
+
+            foreach (var st in serviceTypes)
+            {
+                // Get extra services specific to this service type
+                var specificExtraServices = await _context.ExtraServices
+                    .Where(es => es.ServiceTypeId == st.Id && !es.IsAvailableForAll)
+                    .OrderBy(es => es.DisplayOrder)
+                    .ToListAsync();
+
+                var serviceTypeDto = new ServiceTypeDto
                 {
                     Id = st.Id,
                     Name = st.Name,
                     BasePrice = st.BasePrice,
                     Description = st.Description,
+                    IsActive = st.IsActive,
                     Services = st.Services.Select(s => new ServiceDto
                     {
                         Id = s.Id,
@@ -46,28 +64,54 @@ namespace DreamCleaningBackend.Controllers
                         MaxValue = s.MaxValue,
                         StepValue = s.StepValue,
                         IsRangeInput = s.IsRangeInput,
-                        Unit = s.Unit
+                        Unit = s.Unit,
+                        IsActive = s.IsActive
                     }).ToList(),
-                    ExtraServices = st.ExtraServices.Select(es => new ExtraServiceDto
-                    {
-                        Id = es.Id,
-                        Name = es.Name,
-                        Description = es.Description,
-                        Price = es.Price,
-                        Duration = es.Duration,
-                        Icon = es.Icon,
-                        HasQuantity = es.HasQuantity,
-                        HasHours = es.HasHours,
-                        IsDeepCleaning = es.IsDeepCleaning,
-                        IsSuperDeepCleaning = es.IsSuperDeepCleaning,
-                        IsSameDayService = es.IsSameDayService,
-                        PriceMultiplier = es.PriceMultiplier,
-                        IsAvailableForAll = es.IsAvailableForAll
-                    }).ToList()
-                })
-                .ToListAsync();
+                    ExtraServices = new List<ExtraServiceDto>()
+                };
 
-            return Ok(serviceTypes);
+                // Add specific extra services first
+                serviceTypeDto.ExtraServices.AddRange(specificExtraServices.Select(es => new ExtraServiceDto
+                {
+                    Id = es.Id,
+                    Name = es.Name,
+                    Description = es.Description,
+                    Price = es.Price,
+                    Duration = es.Duration,
+                    Icon = es.Icon,
+                    HasQuantity = es.HasQuantity,
+                    HasHours = es.HasHours,
+                    IsDeepCleaning = es.IsDeepCleaning,
+                    IsSuperDeepCleaning = es.IsSuperDeepCleaning,
+                    IsSameDayService = es.IsSameDayService,
+                    PriceMultiplier = es.PriceMultiplier,
+                    IsAvailableForAll = es.IsAvailableForAll,
+                    IsActive = es.IsActive
+                }));
+
+                // Add universal extra services
+                serviceTypeDto.ExtraServices.AddRange(universalExtraServices.Select(es => new ExtraServiceDto
+                {
+                    Id = es.Id,
+                    Name = es.Name,
+                    Description = es.Description,
+                    Price = es.Price,
+                    Duration = es.Duration,
+                    Icon = es.Icon,
+                    HasQuantity = es.HasQuantity,
+                    HasHours = es.HasHours,
+                    IsDeepCleaning = es.IsDeepCleaning,
+                    IsSuperDeepCleaning = es.IsSuperDeepCleaning,
+                    IsSameDayService = es.IsSameDayService,
+                    PriceMultiplier = es.PriceMultiplier,
+                    IsAvailableForAll = es.IsAvailableForAll,
+                    IsActive = es.IsActive
+                }));
+
+                result.Add(serviceTypeDto);
+            }
+
+            return Ok(result);
         }
 
         [HttpPost("service-types")]
@@ -91,7 +135,8 @@ namespace DreamCleaningBackend.Controllers
                 Id = serviceType.Id,
                 Name = serviceType.Name,
                 BasePrice = serviceType.BasePrice,
-                Description = serviceType.Description
+                Description = serviceType.Description,
+                IsActive = serviceType.IsActive
             });
         }
 
@@ -115,12 +160,13 @@ namespace DreamCleaningBackend.Controllers
                 Id = serviceType.Id,
                 Name = serviceType.Name,
                 BasePrice = serviceType.BasePrice,
-                Description = serviceType.Description
+                Description = serviceType.Description,
+                IsActive = serviceType.IsActive
             });
         }
 
-        [HttpDelete("service-types/{id}")]
-        public async Task<ActionResult> DeleteServiceType(int id)
+        [HttpPut("service-types/{id}/deactivate")]
+        public async Task<ActionResult> DeactivateServiceType(int id)
         {
             var serviceType = await _context.ServiceTypes.FindAsync(id);
             if (serviceType == null)
@@ -128,6 +174,48 @@ namespace DreamCleaningBackend.Controllers
 
             serviceType.IsActive = false;
             serviceType.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+        [HttpPut("service-types/{id}/activate")]
+        public async Task<ActionResult> ActivateServiceType(int id)
+        {
+            var serviceType = await _context.ServiceTypes.FindAsync(id);
+            if (serviceType == null)
+                return NotFound();
+
+            serviceType.IsActive = true;
+            serviceType.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+        [HttpDelete("service-types/{id}")]
+        public async Task<ActionResult> DeleteServiceType(int id)
+        {
+            var serviceType = await _context.ServiceTypes
+                .Include(st => st.Services)
+                .Include(st => st.ExtraServices)
+                .Include(st => st.Orders)
+                .FirstOrDefaultAsync(st => st.Id == id);
+
+            if (serviceType == null)
+                return NotFound();
+
+            // Check if there are any orders
+            if (serviceType.Orders.Any())
+            {
+                return BadRequest("Cannot delete service type with existing orders. Please deactivate instead.");
+            }
+
+            // Delete related services and extra services
+            _context.Services.RemoveRange(serviceType.Services);
+            _context.ExtraServices.RemoveRange(serviceType.ExtraServices);
+            _context.ServiceTypes.Remove(serviceType);
+
             await _context.SaveChangesAsync();
 
             return Ok();
@@ -153,7 +241,8 @@ namespace DreamCleaningBackend.Controllers
                     MaxValue = s.MaxValue,
                     StepValue = s.StepValue,
                     IsRangeInput = s.IsRangeInput,
-                    Unit = s.Unit
+                    Unit = s.Unit,
+                    IsActive = s.IsActive
                 })
                 .ToListAsync();
 
@@ -197,7 +286,54 @@ namespace DreamCleaningBackend.Controllers
                 MaxValue = service.MaxValue,
                 StepValue = service.StepValue,
                 IsRangeInput = service.IsRangeInput,
-                Unit = service.Unit
+                Unit = service.Unit,
+                IsActive = service.IsActive
+            });
+        }
+
+        [HttpPost("services/copy")]
+        public async Task<ActionResult<ServiceDto>> CopyService(CopyServiceDto dto)
+        {
+            var sourceService = await _context.Services.FindAsync(dto.SourceServiceId);
+            if (sourceService == null)
+                return NotFound("Source service not found");
+
+            var newService = new Service
+            {
+                Name = sourceService.Name,
+                ServiceKey = sourceService.ServiceKey,
+                Cost = sourceService.Cost,
+                TimeDuration = sourceService.TimeDuration,
+                ServiceTypeId = dto.TargetServiceTypeId,
+                InputType = sourceService.InputType,
+                MinValue = sourceService.MinValue,
+                MaxValue = sourceService.MaxValue,
+                StepValue = sourceService.StepValue,
+                IsRangeInput = sourceService.IsRangeInput,
+                Unit = sourceService.Unit,
+                DisplayOrder = sourceService.DisplayOrder,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Services.Add(newService);
+            await _context.SaveChangesAsync();
+
+            return Ok(new ServiceDto
+            {
+                Id = newService.Id,
+                Name = newService.Name,
+                ServiceKey = newService.ServiceKey,
+                Cost = newService.Cost,
+                TimeDuration = newService.TimeDuration,
+                ServiceTypeId = newService.ServiceTypeId,
+                InputType = newService.InputType,
+                MinValue = newService.MinValue,
+                MaxValue = newService.MaxValue,
+                StepValue = newService.StepValue,
+                IsRangeInput = newService.IsRangeInput,
+                Unit = newService.Unit,
+                IsActive = newService.IsActive
             });
         }
 
@@ -237,12 +373,13 @@ namespace DreamCleaningBackend.Controllers
                 MaxValue = service.MaxValue,
                 StepValue = service.StepValue,
                 IsRangeInput = service.IsRangeInput,
-                Unit = service.Unit
+                Unit = service.Unit,
+                IsActive = service.IsActive
             });
         }
 
-        [HttpDelete("services/{id}")]
-        public async Task<ActionResult> DeleteService(int id)
+        [HttpPut("services/{id}/deactivate")]
+        public async Task<ActionResult> DeactivateService(int id)
         {
             var service = await _context.Services.FindAsync(id);
             if (service == null)
@@ -250,6 +387,42 @@ namespace DreamCleaningBackend.Controllers
 
             service.IsActive = false;
             service.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+        [HttpPut("services/{id}/activate")]
+        public async Task<ActionResult> ActivateService(int id)
+        {
+            var service = await _context.Services.FindAsync(id);
+            if (service == null)
+                return NotFound();
+
+            service.IsActive = true;
+            service.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+        [HttpDelete("services/{id}")]
+        public async Task<ActionResult> DeleteService(int id)
+        {
+            var service = await _context.Services
+                .Include(s => s.OrderServices)
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (service == null)
+                return NotFound();
+
+            // Check if there are any orders using this service
+            if (service.OrderServices.Any())
+            {
+                return BadRequest("Cannot delete service with existing orders. Please deactivate instead.");
+            }
+
+            _context.Services.Remove(service);
             await _context.SaveChangesAsync();
 
             return Ok();
@@ -275,7 +448,8 @@ namespace DreamCleaningBackend.Controllers
                     IsSuperDeepCleaning = es.IsSuperDeepCleaning,
                     IsSameDayService = es.IsSameDayService,
                     PriceMultiplier = es.PriceMultiplier,
-                    IsAvailableForAll = es.IsAvailableForAll
+                    IsAvailableForAll = es.IsAvailableForAll,
+                    IsActive = es.IsActive
                 })
                 .ToListAsync();
 
@@ -322,7 +496,57 @@ namespace DreamCleaningBackend.Controllers
                 IsSuperDeepCleaning = extraService.IsSuperDeepCleaning,
                 IsSameDayService = extraService.IsSameDayService,
                 PriceMultiplier = extraService.PriceMultiplier,
-                IsAvailableForAll = extraService.IsAvailableForAll
+                IsAvailableForAll = extraService.IsAvailableForAll,
+                IsActive = extraService.IsActive
+            });
+        }
+
+        [HttpPost("extra-services/copy")]
+        public async Task<ActionResult<ExtraServiceDto>> CopyExtraService(CopyExtraServiceDto dto)
+        {
+            var sourceExtraService = await _context.ExtraServices.FindAsync(dto.SourceExtraServiceId);
+            if (sourceExtraService == null)
+                return NotFound("Source extra service not found");
+
+            var newExtraService = new ExtraService
+            {
+                Name = sourceExtraService.Name,
+                Description = sourceExtraService.Description,
+                Price = sourceExtraService.Price,
+                Duration = sourceExtraService.Duration,
+                Icon = sourceExtraService.Icon,
+                HasQuantity = sourceExtraService.HasQuantity,
+                HasHours = sourceExtraService.HasHours,
+                IsDeepCleaning = sourceExtraService.IsDeepCleaning,
+                IsSuperDeepCleaning = sourceExtraService.IsSuperDeepCleaning,
+                IsSameDayService = sourceExtraService.IsSameDayService,
+                PriceMultiplier = sourceExtraService.PriceMultiplier,
+                ServiceTypeId = dto.TargetServiceTypeId,
+                IsAvailableForAll = false, // When copying to specific service type
+                DisplayOrder = sourceExtraService.DisplayOrder,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.ExtraServices.Add(newExtraService);
+            await _context.SaveChangesAsync();
+
+            return Ok(new ExtraServiceDto
+            {
+                Id = newExtraService.Id,
+                Name = newExtraService.Name,
+                Description = newExtraService.Description,
+                Price = newExtraService.Price,
+                Duration = newExtraService.Duration,
+                Icon = newExtraService.Icon,
+                HasQuantity = newExtraService.HasQuantity,
+                HasHours = newExtraService.HasHours,
+                IsDeepCleaning = newExtraService.IsDeepCleaning,
+                IsSuperDeepCleaning = newExtraService.IsSuperDeepCleaning,
+                IsSameDayService = newExtraService.IsSameDayService,
+                PriceMultiplier = newExtraService.PriceMultiplier,
+                IsAvailableForAll = newExtraService.IsAvailableForAll,
+                IsActive = newExtraService.IsActive
             });
         }
 
@@ -365,12 +589,13 @@ namespace DreamCleaningBackend.Controllers
                 IsSuperDeepCleaning = extraService.IsSuperDeepCleaning,
                 IsSameDayService = extraService.IsSameDayService,
                 PriceMultiplier = extraService.PriceMultiplier,
-                IsAvailableForAll = extraService.IsAvailableForAll
+                IsAvailableForAll = extraService.IsAvailableForAll,
+                IsActive = extraService.IsActive
             });
         }
 
-        [HttpDelete("extra-services/{id}")]
-        public async Task<ActionResult> DeleteExtraService(int id)
+        [HttpPut("extra-services/{id}/deactivate")]
+        public async Task<ActionResult> DeactivateExtraService(int id)
         {
             var extraService = await _context.ExtraServices.FindAsync(id);
             if (extraService == null)
@@ -383,7 +608,43 @@ namespace DreamCleaningBackend.Controllers
             return Ok();
         }
 
-        // Frequencies Management
+        [HttpPut("extra-services/{id}/activate")]
+        public async Task<ActionResult> ActivateExtraService(int id)
+        {
+            var extraService = await _context.ExtraServices.FindAsync(id);
+            if (extraService == null)
+                return NotFound();
+
+            extraService.IsActive = true;
+            extraService.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+        [HttpDelete("extra-services/{id}")]
+        public async Task<ActionResult> DeleteExtraService(int id)
+        {
+            var extraService = await _context.ExtraServices
+                .Include(es => es.OrderExtraServices)
+                .FirstOrDefaultAsync(es => es.Id == id);
+
+            if (extraService == null)
+                return NotFound();
+
+            // Check if there are any orders using this extra service
+            if (extraService.OrderExtraServices.Any())
+            {
+                return BadRequest("Cannot delete extra service with existing orders. Please deactivate instead.");
+            }
+
+            _context.ExtraServices.Remove(extraService);
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+        // Frequencies Management (rest of the code remains the same)
         [HttpGet("frequencies")]
         public async Task<ActionResult<List<FrequencyDto>>> GetFrequencies()
         {

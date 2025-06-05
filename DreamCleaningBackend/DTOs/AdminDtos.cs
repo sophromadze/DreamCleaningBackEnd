@@ -2,6 +2,72 @@
 
 namespace DreamCleaningBackend.DTOs
 {
+    // Service Type DTOs
+    public class ServiceTypeDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public decimal BasePrice { get; set; }
+        public string? Description { get; set; }
+        public bool IsActive { get; set; }
+        public List<ServiceDto> Services { get; set; } = new List<ServiceDto>();
+        public List<ExtraServiceDto> ExtraServices { get; set; } = new List<ExtraServiceDto>();
+    }
+
+    public class ServiceDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string ServiceKey { get; set; }
+        public decimal Cost { get; set; }
+        public int TimeDuration { get; set; }
+        public int ServiceTypeId { get; set; }
+        public string InputType { get; set; }
+        public int? MinValue { get; set; }
+        public int? MaxValue { get; set; }
+        public int? StepValue { get; set; }
+        public bool IsRangeInput { get; set; }
+        public string? Unit { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    public class ExtraServiceDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string? Description { get; set; }
+        public decimal Price { get; set; }
+        public int Duration { get; set; }
+        public string? Icon { get; set; }
+        public bool HasQuantity { get; set; }
+        public bool HasHours { get; set; }
+        public bool IsDeepCleaning { get; set; }
+        public bool IsSuperDeepCleaning { get; set; }
+        public bool IsSameDayService { get; set; }
+        public decimal PriceMultiplier { get; set; }
+        public bool IsAvailableForAll { get; set; }
+        public bool IsActive { get; set; }
+    }
+    public class CreateServiceTypeDto
+    {
+        [Required]
+        public string Name { get; set; }
+        [Required]
+        public decimal BasePrice { get; set; }
+        public string? Description { get; set; }
+        public int DisplayOrder { get; set; }
+    }
+
+    public class UpdateServiceTypeDto
+    {
+        [Required]
+        public string Name { get; set; }
+        [Required]
+        public decimal BasePrice { get; set; }
+        public string? Description { get; set; }
+        public int DisplayOrder { get; set; }
+    }
+
     // Service DTOs
     public class CreateServiceDto
     {
@@ -113,5 +179,96 @@ namespace DreamCleaningBackend.DTOs
         [Required]
         public int FrequencyDays { get; set; }
         public int DisplayOrder { get; set; }
+    }
+
+    // Promo Code DTOs
+    public class PromoCodeDto
+    {
+        public int Id { get; set; }
+        public string Code { get; set; }
+        public string? Description { get; set; }
+        public bool IsPercentage { get; set; }
+        public decimal DiscountValue { get; set; }
+        public int? MaxUsageCount { get; set; }
+        public int CurrentUsageCount { get; set; }
+        public int? MaxUsagePerUser { get; set; }
+        public DateTime? ValidFrom { get; set; }
+        public DateTime? ValidTo { get; set; }
+        public decimal? MinimumOrderAmount { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    public class CreatePromoCodeDto
+    {
+        [Required]
+        public string Code { get; set; }
+        public string? Description { get; set; }
+        public bool IsPercentage { get; set; } = true;
+        [Required]
+        public decimal DiscountValue { get; set; }
+        public int? MaxUsageCount { get; set; }
+        public int? MaxUsagePerUser { get; set; }
+        public DateTime? ValidFrom { get; set; }
+        public DateTime? ValidTo { get; set; }
+        public decimal? MinimumOrderAmount { get; set; }
+    }
+
+    public class UpdatePromoCodeDto
+    {
+        public string? Description { get; set; }
+        public bool IsPercentage { get; set; }
+        [Required]
+        public decimal DiscountValue { get; set; }
+        public int? MaxUsageCount { get; set; }
+        public int? MaxUsagePerUser { get; set; }
+        public DateTime? ValidFrom { get; set; }
+        public DateTime? ValidTo { get; set; }
+        public decimal? MinimumOrderAmount { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    // User Management DTOs
+    public class UserAdminDto
+    {
+        public int Id { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string Email { get; set; }
+        public string? Phone { get; set; }
+        public string Role { get; set; }
+        public string? AuthProvider { get; set; }
+        public string? SubscriptionName { get; set; }
+        public bool FirstTimeOrder { get; set; }
+        public bool IsActive { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class UpdateUserRoleDto
+    {
+        [Required]
+        public string Role { get; set; }
+    }
+
+    public class UpdateUserStatusDto
+    {
+        [Required]
+        public bool IsActive { get; set; }
+    }
+
+    // Copy Service/ExtraService DTOs
+    public class CopyServiceDto
+    {
+        [Required]
+        public int SourceServiceId { get; set; }
+        [Required]
+        public int TargetServiceTypeId { get; set; }
+    }
+
+    public class CopyExtraServiceDto
+    {
+        [Required]
+        public int SourceExtraServiceId { get; set; }
+        [Required]
+        public int TargetServiceTypeId { get; set; }
     }
 }

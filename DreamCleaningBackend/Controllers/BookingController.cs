@@ -26,10 +26,27 @@ namespace DreamCleaningBackend.Controllers
         {
             var serviceTypes = await _context.ServiceTypes
                 .Include(st => st.Services.Where(s => s.IsActive))
-                .Include(st => st.ExtraServices.Where(es => es.IsActive))
                 .Where(st => st.IsActive)
                 .OrderBy(st => st.DisplayOrder)
-                .Select(st => new ServiceTypeDto
+                .ToListAsync();
+
+            // Get all extra services that are available for all
+            var universalExtraServices = await _context.ExtraServices
+                .Where(es => es.IsActive && es.IsAvailableForAll && es.ServiceTypeId == null)
+                .OrderBy(es => es.DisplayOrder)
+                .ToListAsync();
+
+            var result = new List<ServiceTypeDto>();
+
+            foreach (var st in serviceTypes)
+            {
+                // Get extra services specific to this service type
+                var specificExtraServices = await _context.ExtraServices
+                    .Where(es => es.IsActive && es.ServiceTypeId == st.Id && !es.IsAvailableForAll)
+                    .OrderBy(es => es.DisplayOrder)
+                    .ToListAsync();
+
+                var serviceTypeDto = new ServiceTypeDto
                 {
                     Id = st.Id,
                     Name = st.Name,
@@ -50,30 +67,11 @@ namespace DreamCleaningBackend.Controllers
                         IsRangeInput = s.IsRangeInput,
                         Unit = s.Unit
                     }).ToList(),
-                    ExtraServices = st.ExtraServices.Select(es => new ExtraServiceDto
-                    {
-                        Id = es.Id,
-                        Name = es.Name,
-                        Description = es.Description,
-                        Price = es.Price,
-                        Duration = es.Duration,
-                        Icon = es.Icon,
-                        HasQuantity = es.HasQuantity,
-                        HasHours = es.HasHours,
-                        IsDeepCleaning = es.IsDeepCleaning,
-                        IsSuperDeepCleaning = es.IsSuperDeepCleaning,
-                        IsSameDayService = es.IsSameDayService,
-                        PriceMultiplier = es.PriceMultiplier,
-                        IsAvailableForAll = es.IsAvailableForAll
-                    }).ToList()
-                })
-                .ToListAsync();
+                    ExtraServices = new List<ExtraServiceDto>()
+                };
 
-            // Also add extra services that are available for all service types
-            var universalExtraServices = await _context.ExtraServices
-                .Where(es => es.IsActive && es.IsAvailableForAll && es.ServiceTypeId == null)
-                .OrderBy(es => es.DisplayOrder)
-                .Select(es => new ExtraServiceDto
+                // Add specific extra services first
+                serviceTypeDto.ExtraServices.AddRange(specificExtraServices.Select(es => new ExtraServiceDto
                 {
                     Id = es.Id,
                     Name = es.Name,
@@ -88,16 +86,30 @@ namespace DreamCleaningBackend.Controllers
                     IsSameDayService = es.IsSameDayService,
                     PriceMultiplier = es.PriceMultiplier,
                     IsAvailableForAll = es.IsAvailableForAll
-                })
-                .ToListAsync();
+                }));
 
-            // Add universal extra services to each service type
-            foreach (var serviceType in serviceTypes)
-            {
-                serviceType.ExtraServices.AddRange(universalExtraServices);
+                // Add universal extra services
+                serviceTypeDto.ExtraServices.AddRange(universalExtraServices.Select(es => new ExtraServiceDto
+                {
+                    Id = es.Id,
+                    Name = es.Name,
+                    Description = es.Description,
+                    Price = es.Price,
+                    Duration = es.Duration,
+                    Icon = es.Icon,
+                    HasQuantity = es.HasQuantity,
+                    HasHours = es.HasHours,
+                    IsDeepCleaning = es.IsDeepCleaning,
+                    IsSuperDeepCleaning = es.IsSuperDeepCleaning,
+                    IsSameDayService = es.IsSameDayService,
+                    PriceMultiplier = es.PriceMultiplier,
+                    IsAvailableForAll = es.IsAvailableForAll
+                }));
+
+                result.Add(serviceTypeDto);
             }
 
-            return Ok(serviceTypes);
+            return Ok(result);
         }
 
         [HttpGet("frequencies")]
