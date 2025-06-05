@@ -3,6 +3,7 @@ using DreamCleaningBackend.Data;
 using DreamCleaningBackend.DTOs;
 using DreamCleaningBackend.Models;
 using DreamCleaningBackend.Services.Interfaces;
+using DreamCleaningBackend.Repositories.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,47 +13,37 @@ namespace DreamCleaningBackend.Services
 {
     public class OrderService : IOrderService
     {
+        private readonly IOrderRepository _orderRepository;
         private readonly ApplicationDbContext _context;
 
-        public OrderService(ApplicationDbContext context)
+        public OrderService(IOrderRepository orderRepository, ApplicationDbContext context)
         {
+            _orderRepository = orderRepository;
             _context = context;
         }
 
         public async Task<List<OrderListDto>> GetUserOrders(int userId)
         {
-            var orders = await _context.Orders
-                .Include(o => o.ServiceType)
-                .Where(o => o.UserId == userId)
-                .OrderByDescending(o => o.OrderDate)
-                .Select(o => new OrderListDto
-                {
-                    Id = o.Id,
-                    ServiceTypeName = o.ServiceType.Name,
-                    ServiceDate = o.ServiceDate,
-                    ServiceTime = o.ServiceTime,
-                    Status = o.Status,
-                    Total = o.Total,
-                    ServiceAddress = o.ServiceAddress + (string.IsNullOrEmpty(o.AptSuite) ? "" : ", " + o.AptSuite),
-                    OrderDate = o.OrderDate
-                })
-                .ToListAsync();
+            var orders = await _orderRepository.GetUserOrdersAsync(userId);
 
-            return orders;
+            return orders.Select(o => new OrderListDto
+            {
+                Id = o.Id,
+                ServiceTypeName = o.ServiceType?.Name ?? "",
+                ServiceDate = o.ServiceDate,
+                ServiceTime = o.ServiceTime,
+                Status = o.Status,
+                Total = o.Total,
+                ServiceAddress = o.ServiceAddress + (string.IsNullOrEmpty(o.AptSuite) ? "" : ", " + o.AptSuite),
+                OrderDate = o.OrderDate
+            }).ToList();
         }
 
         public async Task<OrderDto> GetOrderById(int orderId, int userId)
         {
-            var order = await _context.Orders
-                .Include(o => o.ServiceType)
-                .Include(o => o.Frequency)
-                .Include(o => o.OrderServices)
-                    .ThenInclude(os => os.Service)
-                .Include(o => o.OrderExtraServices)
-                    .ThenInclude(oes => oes.ExtraService)
-                .FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
+            var order = await _orderRepository.GetByIdWithDetailsAsync(orderId);
 
-            if (order == null)
+            if (order == null || order.UserId != userId)
                 throw new Exception("Order not found");
 
             return MapOrderToDto(order);
@@ -60,12 +51,9 @@ namespace DreamCleaningBackend.Services
 
         public async Task<OrderDto> UpdateOrder(int orderId, int userId, UpdateOrderDto updateOrderDto)
         {
-            var order = await _context.Orders
-                .Include(o => o.OrderServices)
-                .Include(o => o.OrderExtraServices)
-                .FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
+            var order = await _orderRepository.GetByIdWithDetailsAsync(orderId);
 
-            if (order == null)
+            if (order == null || order.UserId != userId)
                 throw new Exception("Order not found");
 
             if (order.Status == "Cancelled")
@@ -105,7 +93,7 @@ namespace DreamCleaningBackend.Services
                 var service = await _context.Services.FindAsync(serviceDto.ServiceId);
                 if (service != null)
                 {
-                    var orderService = new OrderService
+                    var orderService = new Models.OrderService
                     {
                         Order = order,
                         ServiceId = serviceDto.ServiceId,
@@ -157,17 +145,17 @@ namespace DreamCleaningBackend.Services
             order.Tax = discountedSubTotal * 0.088m; // 8.8% tax
             order.Total = discountedSubTotal + order.Tax + order.Tips;
 
-            await _context.SaveChangesAsync();
+            await _orderRepository.UpdateAsync(order);
+            await _orderRepository.SaveChangesAsync();
 
             return await GetOrderById(orderId, userId);
         }
 
         public async Task<bool> CancelOrder(int orderId, int userId, CancelOrderDto cancelOrderDto)
         {
-            var order = await _context.Orders
-                .FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
+            var order = await _orderRepository.GetByIdAsync(orderId);
 
-            if (order == null)
+            if (order == null || order.UserId != userId)
                 throw new Exception("Order not found");
 
             if (order.Status == "Cancelled")
@@ -186,16 +174,15 @@ namespace DreamCleaningBackend.Services
             // In a real system, you would initiate a refund process here
             // For now, we'll just mark it as cancelled
 
-            await _context.SaveChangesAsync();
+            await _orderRepository.UpdateAsync(order);
+            await _orderRepository.SaveChangesAsync();
 
             return true;
         }
 
         public async Task<decimal> CalculateAdditionalAmount(int orderId, UpdateOrderDto updateOrderDto)
         {
-            var order = await _context.Orders
-                .Include(o => o.ServiceType)
-                .FirstOrDefaultAsync(o => o.Id == orderId);
+            var order = await _orderRepository.GetByIdWithDetailsAsync(orderId);
 
             if (order == null)
                 throw new Exception("Order not found");
@@ -237,7 +224,7 @@ namespace DreamCleaningBackend.Services
 
         public async Task<bool> MarkOrderAsDone(int orderId)
         {
-            var order = await _context.Orders.FindAsync(orderId);
+            var order = await _orderRepository.GetByIdAsync(orderId);
 
             if (order == null)
                 throw new Exception("Order not found");
@@ -248,7 +235,8 @@ namespace DreamCleaningBackend.Services
             order.Status = "Done";
             order.UpdatedAt = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await _orderRepository.UpdateAsync(order);
+            await _orderRepository.SaveChangesAsync();
 
             return true;
         }
