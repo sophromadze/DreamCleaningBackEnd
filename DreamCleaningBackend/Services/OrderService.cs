@@ -188,26 +188,34 @@ namespace DreamCleaningBackend.Services
                 throw new Exception("Order not found");
 
             // Calculate new total
-            decimal newSubTotal = order.ServiceType.BasePrice;
+            decimal newSubTotal = order.ServiceType?.BasePrice ?? 0;
 
-            foreach (var serviceDto in updateOrderDto.Services)
+            // Validate and calculate services
+            if (updateOrderDto.Services != null)
             {
-                var service = await _context.Services.FindAsync(serviceDto.ServiceId);
-                if (service != null)
+                foreach (var serviceDto in updateOrderDto.Services)
                 {
-                    newSubTotal += service.Cost * serviceDto.Quantity;
+                    var service = await _context.Services.FindAsync(serviceDto.ServiceId);
+                    if (service != null)
+                    {
+                        newSubTotal += service.Cost * serviceDto.Quantity;
+                    }
                 }
             }
 
-            foreach (var extraServiceDto in updateOrderDto.ExtraServices)
+            // Validate and calculate extra services
+            if (updateOrderDto.ExtraServices != null)
             {
-                var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
-                if (extraService != null)
+                foreach (var extraServiceDto in updateOrderDto.ExtraServices)
                 {
-                    var cost = extraService.HasHours
-                        ? extraService.Price * extraServiceDto.Hours
-                        : extraService.Price * extraServiceDto.Quantity;
-                    newSubTotal += cost;
+                    var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
+                    if (extraService != null)
+                    {
+                        var cost = extraService.HasHours
+                            ? extraService.Price * extraServiceDto.Hours
+                            : extraService.Price * extraServiceDto.Quantity;
+                        newSubTotal += cost;
+                    }
                 }
             }
 
