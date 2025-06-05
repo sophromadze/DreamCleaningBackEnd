@@ -201,6 +201,8 @@ namespace DreamCleaningBackend.Controllers
             return Ok(calculation);
         }
 
+        // In BookingController.cs, update the CreateBooking method:
+
         [HttpPost("create")]
         [Authorize]
         public async Task<ActionResult<BookingResponseDto>> CreateBooking(CreateBookingDto dto)
@@ -221,6 +223,13 @@ namespace DreamCleaningBackend.Controllers
                 if (frequency == null)
                     return BadRequest(new { message = "Invalid frequency" });
 
+                // Ensure the service date is properly set with UTC kind
+                var serviceDate = dto.ServiceDate.Date;
+                if (serviceDate.Kind == DateTimeKind.Unspecified)
+                {
+                    serviceDate = DateTime.SpecifyKind(serviceDate, DateTimeKind.Utc);
+                }
+
                 // Create the order
                 var order = new Order
                 {
@@ -228,7 +237,7 @@ namespace DreamCleaningBackend.Controllers
                     ServiceTypeId = dto.ServiceTypeId,
                     FrequencyId = dto.FrequencyId,
                     OrderDate = DateTime.UtcNow,
-                    ServiceDate = dto.ServiceDate,
+                    ServiceDate = serviceDate,
                     ServiceTime = TimeSpan.Parse(dto.ServiceTime),
                     EntryMethod = dto.EntryMethod,
                     SpecialInstructions = dto.SpecialInstructions,

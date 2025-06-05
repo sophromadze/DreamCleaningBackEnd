@@ -180,6 +180,8 @@ namespace DreamCleaningBackend.Services
             return true;
         }
 
+        // In OrderService.cs, update the CalculateAdditionalAmount method:
+
         public async Task<decimal> CalculateAdditionalAmount(int orderId, UpdateOrderDto updateOrderDto)
         {
             var order = await _orderRepository.GetByIdWithDetailsAsync(orderId);
@@ -187,23 +189,27 @@ namespace DreamCleaningBackend.Services
             if (order == null)
                 throw new Exception("Order not found");
 
-            // Calculate new total
-            decimal newSubTotal = order.ServiceType?.BasePrice ?? 0;
+            // Calculate new total based on the original order's service type
+            decimal newSubTotal = 0;
 
-            // Validate and calculate services
-            if (updateOrderDto.Services != null)
+            // Add base price from service type
+            if (order.ServiceType != null)
             {
-                foreach (var serviceDto in updateOrderDto.Services)
+                newSubTotal = order.ServiceType.BasePrice;
+            }
+            else
+            {
+                // If ServiceType is null, try to load it
+                var serviceType = await _context.ServiceTypes.FindAsync(order.ServiceTypeId);
+                if (serviceType != null)
                 {
-                    var service = await _context.Services.FindAsync(serviceDto.ServiceId);
-                    if (service != null)
-                    {
-                        newSubTotal += service.Cost * serviceDto.Quantity;
-                    }
+                    newSubTotal = serviceType.BasePrice;
                 }
             }
 
-            // Validate and calculate extra services
+            // Check for deep cleaning multipliers in the update
+            decimal priceMultiplier = 1.0m;
+
             if (updateOrderDto.ExtraServices != null)
             {
                 foreach (var extraServiceDto in updateOrderDto.ExtraServices)
@@ -211,22 +217,104 @@ namespace DreamCleaningBackend.Services
                     var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
                     if (extraService != null)
                     {
-                        var cost = extraService.HasHours
-                            ? extraService.Price * extraServiceDto.Hours
-                            : extraService.Price * extraServiceDto.Quantity;
-                        newSubTotal += cost;
+                        if (extraService.IsSuperDeepCleaning)
+                        {
+                            priceMultiplier = extraService.PriceMultiplier;
+                            break; // Super deep cleaning takes precedence
+                        }
+                        else if (extraService.IsDeepCleaning && priceMultiplier == 1.0m)
+                        {
+                            priceMultiplier = extraService.PriceMultiplier;
+                        }
                     }
                 }
             }
 
-            // Apply original discount percentage
+            // Calculate services cost
+            if (updateOrderDto.Services != null && updateOrderDto.Services.Any())
+            {
+                foreach (var serviceDto in updateOrderDto.Services)
+                {
+                    var service = await _context.Services.FindAsync(serviceDto.ServiceId);
+                    if (service != null)
+                    {
+                        // Special handling for office cleaning
+                        if (service.ServiceKey == "cleaners" && order.ServiceType?.Name == "Office Cleaning")
+                        {
+                            // Find the hours service
+                            var hoursServiceDto = updateOrderDto.Services.FirstOrDefault(s =>
+                            {
+                                var svc = _context.Services.Find(s.ServiceId);
+                                return svc?.ServiceKey == "hours";
+                            });
+
+                            if (hoursServiceDto != null)
+                            {
+                                var hours = hoursServiceDto.Quantity;
+                                var cleaners = serviceDto.Quantity;
+                                var costPerCleanerPerHour = service.Cost * priceMultiplier;
+                                newSubTotal += costPerCleanerPerHour * cleaners * hours;
+                            }
+                        }
+                        else if (service.ServiceKey == "bedrooms" && serviceDto.Quantity == 0)
+                        {
+                            // Studio apartment - flat rate
+                            newSubTotal += 20 * priceMultiplier;
+                        }
+                        else if (service.ServiceKey != "hours")
+                        {
+                            // Regular service calculation
+                            newSubTotal += service.Cost * serviceDto.Quantity * priceMultiplier;
+                        }
+                    }
+                }
+            }
+
+            // Calculate extra services cost
+            if (updateOrderDto.ExtraServices != null && updateOrderDto.ExtraServices.Any())
+            {
+                foreach (var extraServiceDto in updateOrderDto.ExtraServices)
+                {
+                    var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
+                    if (extraService != null)
+                    {
+                        // Don't add cost for deep cleaning services as they affect the multiplier
+                        if (!extraService.IsDeepCleaning && !extraService.IsSuperDeepCleaning)
+                        {
+                            if (extraService.HasHours && extraServiceDto.Hours > 0)
+                            {
+                                newSubTotal += extraService.Price * extraServiceDto.Hours;
+                            }
+                            else if (extraService.HasQuantity && extraServiceDto.Quantity > 0)
+                            {
+                                newSubTotal += extraService.Price * extraServiceDto.Quantity;
+                            }
+                            else if (!extraService.HasHours && !extraService.HasQuantity)
+                            {
+                                // Fixed price service
+                                newSubTotal += extraService.Price;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Apply original discount amount (not percentage, to keep the same discount)
             var discountedSubTotal = newSubTotal - order.DiscountAmount;
-            var newTax = discountedSubTotal * 0.088m;
+
+            // Make sure we don't go negative
+            if (discountedSubTotal < 0)
+            {
+                discountedSubTotal = 0;
+            }
+
+            var newTax = discountedSubTotal * 0.088m; // 8.8% tax
             var newTotal = discountedSubTotal + newTax + updateOrderDto.Tips;
 
             // Calculate the difference
             var additionalAmount = newTotal - order.Total;
 
+            // Return 0 if the amount would be negative (can't reduce the order total)
             return additionalAmount > 0 ? additionalAmount : 0;
         }
 

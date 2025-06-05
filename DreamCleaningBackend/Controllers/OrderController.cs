@@ -79,18 +79,43 @@ namespace DreamCleaningBackend.Controllers
             }
         }
 
+        // In OrderController.cs, update the CalculateAdditionalAmount method:
+
         [HttpPost("{orderId}/calculate-additional")]
         public async Task<ActionResult> CalculateAdditionalAmount(int orderId, UpdateOrderDto updateOrderDto)
         {
             try
             {
                 var userId = GetUserId();
+
+                // Validate the DTO
+                if (updateOrderDto == null)
+                {
+                    return BadRequest(new { message = "Invalid request data" });
+                }
+
+                if (updateOrderDto.Services == null || !updateOrderDto.Services.Any())
+                {
+                    return BadRequest(new { message = "Services are required" });
+                }
+
+                // Check if the order belongs to the user
+                var order = await _orderService.GetOrderById(orderId, userId);
+                if (order == null)
+                {
+                    return NotFound(new { message = "Order not found" });
+                }
+
                 var additionalAmount = await _orderService.CalculateAdditionalAmount(orderId, updateOrderDto);
                 return Ok(new { additionalAmount });
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = ex.Message });
+                // Log the exception details for debugging
+                Console.WriteLine($"Error calculating additional amount: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+
+                return BadRequest(new { message = $"Failed to calculate additional amount: {ex.Message}" });
             }
         }
 
