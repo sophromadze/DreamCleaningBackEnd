@@ -198,19 +198,62 @@ namespace DreamCleaningBackend.DTOs
         public bool IsActive { get; set; }
     }
 
-    public class CreatePromoCodeDto
+    public class CreatePromoCodeDto : IValidatableObject
     {
         [Required]
+        [StringLength(50)]
         public string Code { get; set; }
+
+        [StringLength(200)]
         public string? Description { get; set; }
+
         public bool IsPercentage { get; set; } = true;
+
         [Required]
+        [Range(0.01, double.MaxValue, ErrorMessage = "Discount value must be greater than 0")]
         public decimal DiscountValue { get; set; }
+
+        [Range(1, int.MaxValue, ErrorMessage = "Max usage count must be at least 1")]
         public int? MaxUsageCount { get; set; }
+
+        [Range(1, int.MaxValue, ErrorMessage = "Max usage per user must be at least 1")]
         public int? MaxUsagePerUser { get; set; }
+
         public DateTime? ValidFrom { get; set; }
         public DateTime? ValidTo { get; set; }
+
+        [Range(0.01, double.MaxValue, ErrorMessage = "Minimum order amount must be greater than 0")]
         public decimal? MinimumOrderAmount { get; set; }
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            // Validate percentage discount is not over 100%
+            if (IsPercentage && DiscountValue > 100)
+            {
+                yield return new ValidationResult(
+                    "Percentage discount cannot be greater than 100%",
+                    new[] { nameof(DiscountValue) }
+                );
+            }
+
+            // Validate date range
+            if (ValidFrom.HasValue && ValidTo.HasValue && ValidFrom.Value > ValidTo.Value)
+            {
+                yield return new ValidationResult(
+                    "Valid From date must be before Valid To date",
+                    new[] { nameof(ValidFrom), nameof(ValidTo) }
+                );
+            }
+
+            // Validate that MaxUsagePerUser is not greater than MaxUsageCount
+            if (MaxUsagePerUser.HasValue && MaxUsageCount.HasValue && MaxUsagePerUser.Value > MaxUsageCount.Value)
+            {
+                yield return new ValidationResult(
+                    "Max usage per user cannot be greater than total max usage count",
+                    new[] { nameof(MaxUsagePerUser) }
+                );
+            }
+        }
     }
 
     public class UpdatePromoCodeDto
