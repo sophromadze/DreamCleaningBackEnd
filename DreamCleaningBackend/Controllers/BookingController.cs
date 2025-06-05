@@ -337,6 +337,48 @@ namespace DreamCleaningBackend.Controllers
             }
         }
 
+        // Add this method to BookingController.cs after the CreateBooking method:
+
+        [HttpPost("simulate-payment/{orderId}")]
+        [Authorize]
+        public async Task<ActionResult> SimulatePayment(int orderId)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                if (userId == 0)
+                    return Unauthorized();
+
+                var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
+
+                if (order == null)
+                    return NotFound(new { message = "Order not found" });
+
+                if (order.IsPaid)
+                    return BadRequest(new { message = "Order is already paid" });
+
+                // Simulate payment completion
+                order.IsPaid = true;
+                order.PaidAt = DateTime.UtcNow;
+                order.Status = "Active";
+                order.PaymentIntentId = "pi_simulated_" + Guid.NewGuid().ToString();
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Payment completed successfully",
+                    orderId = order.Id,
+                    status = order.Status
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Failed to process payment: " + ex.Message });
+            }
+        }
+
         [HttpGet("available-times")]
         public ActionResult<List<string>> GetAvailableTimeSlots(DateTime date, int serviceTypeId)
         {
