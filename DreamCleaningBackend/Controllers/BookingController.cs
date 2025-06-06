@@ -383,7 +383,6 @@ namespace DreamCleaningBackend.Controllers
                 }
 
                 // Add extra services
-                // Add extra services
                 foreach (var extraServiceDto in dto.ExtraServices)
                 {
                     var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
@@ -457,6 +456,8 @@ namespace DreamCleaningBackend.Controllers
                 order.Tax = (subTotal - order.DiscountAmount) * 0.088m; // 8.8% tax
                 order.Total = order.SubTotal - order.DiscountAmount + order.Tax + order.Tips;
                 order.TotalDuration = totalDuration;
+
+
 
                 // Add order to database
                 _context.Orders.Add(order);

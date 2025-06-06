@@ -33,6 +33,7 @@ namespace DreamCleaningBackend.DTOs
         public string State { get; set; }
         public string ZipCode { get; set; }
         public int TotalDuration { get; set; }
+        public int MaidsCount { get; set; }
         public bool IsPaid { get; set; }
         public DateTime? PaidAt { get; set; }
         public List<OrderServiceDto> Services { get; set; } = new List<OrderServiceDto>();
@@ -65,6 +66,7 @@ namespace DreamCleaningBackend.DTOs
     {
         public DateTime ServiceDate { get; set; }
         public string ServiceTime { get; set; }
+        public int MaidsCount { get; set; }
         public string EntryMethod { get; set; }
         public string? SpecialInstructions { get; set; }
         public string ContactFirstName { get; set; }

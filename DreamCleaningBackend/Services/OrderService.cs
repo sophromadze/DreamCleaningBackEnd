@@ -183,13 +183,13 @@ namespace DreamCleaningBackend.Services
                     else if (service.ServiceRelationType == "hours")
                     {
                         // Hours service - don't add separately when used with cleaners
-                        var hasCleanerService = updateOrderDto.Services.Any(s =>
+                        var hasCleanerServiceInUpdate = updateOrderDto.Services.Any(s =>
                         {
                             var svc = _context.Services.Find(s.ServiceId);
                             return svc?.ServiceRelationType == "cleaner" && svc.ServiceTypeId == service.ServiceTypeId;
                         });
 
-                        if (hasCleanerService)
+                        if (hasCleanerServiceInUpdate)
                         {
                             shouldAddToOrder = false; // Skip adding hours separately
                         }
@@ -290,9 +290,46 @@ namespace DreamCleaningBackend.Services
             // Add deep cleaning fee AFTER all other calculations
             newSubTotal += deepCleaningFee;
 
+            // Calculate maids count for updated order
+            int maidsCount = 0;
+            bool hasCleanerServiceForMaids = updateOrderDto.Services.Any(s =>
+            {
+                var svc = _context.Services.Find(s.ServiceId);
+                return svc?.ServiceRelationType == "cleaner";
+            });
+
+            if (hasCleanerServiceForMaids)
+            {
+                // If cleaners are explicitly selected, use that count
+                var cleanerServiceDto = updateOrderDto.Services.FirstOrDefault(s =>
+                {
+                    var svc = _context.Services.Find(s.ServiceId);
+                    return svc?.ServiceRelationType == "cleaner";
+                });
+
+                if (cleanerServiceDto != null)
+                {
+                    maidsCount = cleanerServiceDto.Quantity;
+                }
+            }
+            else
+            {
+                // Calculate based on duration (every 6 hours = 1 maid)
+                decimal totalHours = newTotalDuration / 60m;
+                maidsCount = Math.Max(1, (int)Math.Ceiling(totalHours / 6m));
+
+                // Adjust duration based on maids count
+                if (maidsCount > 1)
+                {
+                    newTotalDuration = newTotalDuration / maidsCount;
+                }
+            }
+
+            order.MaidsCount = maidsCount;
+            order.TotalDuration = newTotalDuration;
+
             // Recalculate totals
             order.SubTotal = newSubTotal;
-            order.TotalDuration = newTotalDuration;
 
             // Reapply original discount
             var discountedSubTotal = newSubTotal - order.DiscountAmount;
@@ -638,6 +675,7 @@ namespace DreamCleaningBackend.Services
                 State = order.State,
                 ZipCode = order.ZipCode,
                 TotalDuration = order.TotalDuration,
+                MaidsCount = order.MaidsCount,
                 IsPaid = order.IsPaid,
                 PaidAt = order.PaidAt,
                 Services = order.OrderServices?.Select(os => new OrderServiceDto

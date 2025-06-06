@@ -31,6 +31,9 @@ namespace DreamCleaningBackend.Models
         // Duration in minutes
         public int TotalDuration { get; set; }
 
+        // Number of maids/cleaners for this order
+        public int MaidsCount { get; set; }
+
         // Pricing
         [Column(TypeName = "decimal(18,2)")]
         public decimal SubTotal { get; set; }
