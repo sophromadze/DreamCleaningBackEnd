@@ -266,6 +266,7 @@ namespace DreamCleaningBackend.Controllers
                 StepValue = dto.StepValue,
                 IsRangeInput = dto.IsRangeInput,
                 Unit = dto.Unit,
+                ServiceRelationType = dto.ServiceRelationType, // ADD THIS
                 DisplayOrder = dto.DisplayOrder,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
@@ -288,9 +289,11 @@ namespace DreamCleaningBackend.Controllers
                 StepValue = service.StepValue,
                 IsRangeInput = service.IsRangeInput,
                 Unit = service.Unit,
+                ServiceRelationType = service.ServiceRelationType, // ADD THIS
                 IsActive = service.IsActive
             });
         }
+
 
         [HttpPost("services/copy")]
         public async Task<ActionResult<ServiceDto>> CopyService(CopyServiceDto dto)
@@ -312,6 +315,7 @@ namespace DreamCleaningBackend.Controllers
                 StepValue = sourceService.StepValue,
                 IsRangeInput = sourceService.IsRangeInput,
                 Unit = sourceService.Unit,
+                ServiceRelationType = sourceService.ServiceRelationType, // ADD THIS
                 DisplayOrder = sourceService.DisplayOrder,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
@@ -334,6 +338,7 @@ namespace DreamCleaningBackend.Controllers
                 StepValue = newService.StepValue,
                 IsRangeInput = newService.IsRangeInput,
                 Unit = newService.Unit,
+                ServiceRelationType = newService.ServiceRelationType, // ADD THIS
                 IsActive = newService.IsActive
             });
         }
@@ -356,6 +361,7 @@ namespace DreamCleaningBackend.Controllers
             service.StepValue = dto.StepValue;
             service.IsRangeInput = dto.IsRangeInput;
             service.Unit = dto.Unit;
+            service.ServiceRelationType = dto.ServiceRelationType; // ADD THIS
             service.DisplayOrder = dto.DisplayOrder;
             service.UpdatedAt = DateTime.UtcNow;
 
@@ -375,6 +381,7 @@ namespace DreamCleaningBackend.Controllers
                 StepValue = service.StepValue,
                 IsRangeInput = service.IsRangeInput,
                 Unit = service.Unit,
+                ServiceRelationType = service.ServiceRelationType, // ADD THIS
                 IsActive = service.IsActive
             });
         }

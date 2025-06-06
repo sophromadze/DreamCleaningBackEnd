@@ -89,6 +89,7 @@ namespace DreamCleaningBackend.DTOs
         public int? StepValue { get; set; }
         public bool IsRangeInput { get; set; } = false;
         public string? Unit { get; set; }
+        public string? ServiceRelationType { get; set; } // ADD THIS
         public int DisplayOrder { get; set; }
     }
 
@@ -111,8 +112,10 @@ namespace DreamCleaningBackend.DTOs
         public int? StepValue { get; set; }
         public bool IsRangeInput { get; set; }
         public string? Unit { get; set; }
+        public string? ServiceRelationType { get; set; } // ADD THIS
         public int DisplayOrder { get; set; }
     }
+
 
     // Extra Service DTOs
     public class CreateExtraServiceDto

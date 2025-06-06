@@ -301,15 +301,16 @@ namespace DreamCleaningBackend.Controllers
                     {
                         decimal serviceCost = 0;
                         int serviceDuration = 0;
+                        bool shouldAddToOrder = true;
 
-                        // Special handling for office cleaning
-                        if (service.ServiceKey == "cleaners" && serviceType.Name == "Office Cleaning")
+                        // Special handling for cleaner-hours relationship - works for ANY service type
+                        if (service.ServiceRelationType == "cleaner")
                         {
-                            // Find the hours service
+                            // Find the hours service in the same order
                             var hoursServiceDto = dto.Services.FirstOrDefault(s =>
                             {
                                 var svc = _context.Services.Find(s.ServiceId);
-                                return svc?.ServiceKey == "hours";
+                                return svc?.ServiceRelationType == "hours" && svc.ServiceTypeId == service.ServiceTypeId;
                             });
 
                             if (hoursServiceDto != null)
@@ -320,6 +321,34 @@ namespace DreamCleaningBackend.Controllers
                                 serviceCost = costPerCleanerPerHour * cleaners * hours;
                                 serviceDuration = hours * 60; // Convert to minutes
                             }
+                            else
+                            {
+                                // If no hours service found, might want to handle this case
+                                // For now, we'll calculate based on cleaner count only
+                                serviceCost = service.Cost * serviceDto.Quantity * priceMultiplier;
+                                serviceDuration = service.TimeDuration * serviceDto.Quantity;
+                            }
+                        }
+                        else if (service.ServiceRelationType == "hours")
+                        {
+                            // Hours service - don't add separately when used with cleaners
+                            // Check if there's a cleaner service in the same order
+                            var hasCleanerService = dto.Services.Any(s =>
+                            {
+                                var svc = _context.Services.Find(s.ServiceId);
+                                return svc?.ServiceRelationType == "cleaner" && svc.ServiceTypeId == service.ServiceTypeId;
+                            });
+
+                            if (hasCleanerService)
+                            {
+                                shouldAddToOrder = false; // Skip adding hours separately
+                            }
+                            else
+                            {
+                                // If hours is used alone (without cleaners), treat it as regular service
+                                serviceCost = service.Cost * serviceDto.Quantity * priceMultiplier;
+                                serviceDuration = service.TimeDuration * serviceDto.Quantity;
+                            }
                         }
                         else if (service.ServiceKey == "bedrooms" && serviceDto.Quantity == 0)
                         {
@@ -327,14 +356,15 @@ namespace DreamCleaningBackend.Controllers
                             serviceCost = 20 * priceMultiplier;
                             serviceDuration = 20; // 20 minutes for studio
                         }
-                        else if (service.ServiceKey != "hours")
+                        else
                         {
                             // Regular service calculation
                             serviceCost = service.Cost * serviceDto.Quantity * priceMultiplier;
                             serviceDuration = service.TimeDuration * serviceDto.Quantity;
                         }
 
-                        if (service.ServiceKey != "hours" || serviceType.Name != "Office Cleaning")
+                        // Add to order if it should be added
+                        if (shouldAddToOrder)
                         {
                             var orderService = new OrderService
                             {
