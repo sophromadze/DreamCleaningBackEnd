@@ -257,7 +257,6 @@ namespace DreamCleaningBackend.Controllers
                     CreatedAt = DateTime.UtcNow
                 };
 
-                // Calculate pricing (simplified for now)
                 // Calculate pricing
                 decimal subTotal = serviceType.BasePrice;
                 int totalDuration = 0;
@@ -387,51 +386,6 @@ namespace DreamCleaningBackend.Controllers
                         order.OrderExtraServices.Add(orderExtraService);
 
                         // Add the extra service cost to subtotal
-                        subTotal += cost;
-                        totalDuration += orderExtraService.Duration;
-                    }
-                }
-
-                // Add services
-                foreach (var serviceDto in dto.Services)
-                {
-                    var service = await _context.Services.FindAsync(serviceDto.ServiceId);
-                    if (service != null)
-                    {
-                        var orderService = new OrderService
-                        {
-                            ServiceId = serviceDto.ServiceId,
-                            Quantity = serviceDto.Quantity,
-                            Cost = service.Cost * serviceDto.Quantity,
-                            Duration = service.TimeDuration * serviceDto.Quantity,
-                            CreatedAt = DateTime.UtcNow
-                        };
-                        order.OrderServices.Add(orderService);
-                        subTotal += orderService.Cost;
-                        totalDuration += orderService.Duration;
-                    }
-                }
-
-                // Add extra services
-                foreach (var extraServiceDto in dto.ExtraServices)
-                {
-                    var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
-                    if (extraService != null)
-                    {
-                        var cost = extraService.HasHours
-                            ? extraService.Price * extraServiceDto.Hours
-                            : extraService.Price * extraServiceDto.Quantity;
-
-                        var orderExtraService = new OrderExtraService
-                        {
-                            ExtraServiceId = extraServiceDto.ExtraServiceId,
-                            Quantity = extraServiceDto.Quantity,
-                            Hours = extraServiceDto.Hours,
-                            Cost = cost,
-                            Duration = extraService.Duration,
-                            CreatedAt = DateTime.UtcNow
-                        };
-                        order.OrderExtraServices.Add(orderExtraService);
                         subTotal += cost;
                         totalDuration += orderExtraService.Duration;
                     }
