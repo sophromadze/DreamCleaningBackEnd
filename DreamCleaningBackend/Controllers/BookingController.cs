@@ -258,8 +258,9 @@ namespace DreamCleaningBackend.Controllers
                 };
 
                 // Calculate pricing
-                decimal subTotal = serviceType.BasePrice;
+                decimal subTotal = 0;
                 int totalDuration = 0;
+                decimal deepCleaningFee = 0;
 
                 // Check for deep cleaning multipliers first
                 decimal priceMultiplier = 1.0m;
@@ -275,15 +276,20 @@ namespace DreamCleaningBackend.Controllers
                         {
                             hasSuperDeepCleaning = true;
                             priceMultiplier = extraService.PriceMultiplier;
+                            deepCleaningFee = extraService.Price;
                             break; // Super deep cleaning takes precedence
                         }
                         else if (extraService.IsDeepCleaning)
                         {
                             hasDeepCleaning = true;
                             priceMultiplier = extraService.PriceMultiplier;
+                            deepCleaningFee = extraService.Price;
                         }
                     }
                 }
+
+                // Apply multiplier to base price
+                subTotal = serviceType.BasePrice * priceMultiplier;
 
                 // Add services
                 foreach (var serviceDto in dto.Services)
@@ -371,11 +377,7 @@ namespace DreamCleaningBackend.Controllers
                                 cost = extraService.Price * currentMultiplier;
                             }
                         }
-                        // For deep cleaning services, the cost is their base price (they provide multiplier effect)
-                        else
-                        {
-                            cost = extraService.Price;
-                        }
+                        // For deep cleaning services, cost is 0 here as we add the fee separately
 
                         var orderExtraService = new OrderExtraService
                         {
@@ -388,11 +390,14 @@ namespace DreamCleaningBackend.Controllers
                         };
                         order.OrderExtraServices.Add(orderExtraService);
 
-                        // Add the extra service cost to subtotal
+                        // Add the extra service cost to subtotal (will be 0 for deep cleaning)
                         subTotal += cost;
                         totalDuration += orderExtraService.Duration;
                     }
                 }
+
+                // Add deep cleaning fee AFTER all calculations
+                subTotal += deepCleaningFee;
 
                 // Apply frequency discount
                 if (frequency.DiscountPercentage > 0)

@@ -191,6 +191,7 @@ namespace DreamCleaningBackend.Services
 
             // Calculate new total based on the original order's service type
             decimal newSubTotal = 0;
+            decimal deepCleaningFee = 0;
 
             // Check for deep cleaning multipliers in the update
             decimal priceMultiplier = 1.0m;
@@ -205,11 +206,13 @@ namespace DreamCleaningBackend.Services
                         if (extraService.IsSuperDeepCleaning)
                         {
                             priceMultiplier = extraService.PriceMultiplier;
+                            deepCleaningFee = extraService.Price;
                             break; // Super deep cleaning takes precedence
                         }
                         else if (extraService.IsDeepCleaning && priceMultiplier == 1.0m)
                         {
                             priceMultiplier = extraService.PriceMultiplier;
+                            deepCleaningFee = extraService.Price;
                         }
                     }
                 }
@@ -298,14 +301,13 @@ namespace DreamCleaningBackend.Services
                                 newSubTotal += extraService.Price * currentMultiplier;
                             }
                         }
-                        else
-                        {
-                            // Deep cleaning services - add their base price as a fee
-                            newSubTotal += extraService.Price;
-                        }
+                        // Deep cleaning services don't add their cost here
                     }
                 }
             }
+
+            // Add deep cleaning fee AFTER all calculations
+            newSubTotal += deepCleaningFee;
 
             // Apply original discount amount (not percentage, to keep the same discount)
             var discountedSubTotal = newSubTotal - order.DiscountAmount;
