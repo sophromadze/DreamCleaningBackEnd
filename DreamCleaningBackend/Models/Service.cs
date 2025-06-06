@@ -39,6 +39,10 @@ namespace DreamCleaningBackend.Models
         [StringLength(20)]
         public string? Unit { get; set; } // e.g., "per hour", "per cleaner", "per 100 sqft"
 
+        // Service relationship type
+        [StringLength(20)]
+        public string? ServiceRelationType { get; set; } // "cleaner", "hours", null for regular
+
         public bool IsActive { get; set; } = true;
         public int DisplayOrder { get; set; }
 

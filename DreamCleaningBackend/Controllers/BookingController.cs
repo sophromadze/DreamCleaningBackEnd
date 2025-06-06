@@ -65,7 +65,9 @@ namespace DreamCleaningBackend.Controllers
                         MaxValue = s.MaxValue,
                         StepValue = s.StepValue,
                         IsRangeInput = s.IsRangeInput,
-                        Unit = s.Unit
+                        Unit = s.Unit,
+                        ServiceRelationType = s.ServiceRelationType,
+                        IsActive = s.IsActive
                     }).ToList(),
                     ExtraServices = new List<ExtraServiceDto>()
                 };

@@ -28,6 +28,7 @@ namespace DreamCleaningBackend.DTOs
         public int? StepValue { get; set; }
         public bool IsRangeInput { get; set; }
         public string? Unit { get; set; }
+        public string? ServiceRelationType { get; set; }
         public bool IsActive { get; set; }
     }
 

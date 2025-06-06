@@ -65,6 +65,7 @@ namespace DreamCleaningBackend.Controllers
                         StepValue = s.StepValue,
                         IsRangeInput = s.IsRangeInput,
                         Unit = s.Unit,
+                        ServiceRelationType = s.ServiceRelationType,
                         IsActive = s.IsActive
                     }).ToList(),
                     ExtraServices = new List<ExtraServiceDto>()

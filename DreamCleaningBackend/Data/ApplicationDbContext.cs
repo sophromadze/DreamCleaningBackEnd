@@ -301,6 +301,7 @@ namespace DreamCleaningBackend.Data
                     MaxValue = 10,
                     StepValue = 1,
                     Unit = "per hour",
+                    ServiceRelationType = "cleaner",
                     DisplayOrder = 1,
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow
@@ -317,6 +318,7 @@ namespace DreamCleaningBackend.Data
                     MinValue = 2,
                     MaxValue = 8,
                     StepValue = 1,
+                    ServiceRelationType = "hours",
                     DisplayOrder = 2,
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow
