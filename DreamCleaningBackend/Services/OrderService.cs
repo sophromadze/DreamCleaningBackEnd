@@ -62,8 +62,24 @@ namespace DreamCleaningBackend.Services
             if (order.Status == "Done")
                 throw new Exception("Cannot update a completed order");
 
+            // Store the original total for comparison
+            var originalTotal = order.Total;
+
+            // Log the original total
+            Console.WriteLine($"Original total: ${originalTotal:F2}");
+
             // Calculate the additional amount before updating
             var additionalAmount = await CalculateAdditionalAmount(orderId, updateOrderDto);
+
+            // Log the additional amount
+            Console.WriteLine($"Additional amount: ${additionalAmount:F2}");
+
+            // Check if the new total would be less than the original
+            if (additionalAmount < 0)
+            {
+                var newTotal = originalTotal + additionalAmount;
+                throw new Exception($"Cannot reduce order total. Original: ${originalTotal:F2}, New: ${newTotal:F2}, Difference: ${Math.Abs(additionalAmount):F2}");
+            }
 
             // Update basic order information
             order.ServiceDate = updateOrderDto.ServiceDate;
@@ -82,10 +98,33 @@ namespace DreamCleaningBackend.Services
             order.Tips = updateOrderDto.Tips;
             order.UpdatedAt = DateTime.UtcNow;
 
+            // Calculate price multiplier from extra services FIRST
+            decimal priceMultiplier = 1.0m;
+            decimal deepCleaningFee = 0;
+
+            foreach (var extraServiceDto in updateOrderDto.ExtraServices)
+            {
+                var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
+                if (extraService != null)
+                {
+                    if (extraService.IsSuperDeepCleaning)
+                    {
+                        priceMultiplier = extraService.PriceMultiplier;
+                        deepCleaningFee = extraService.Price;
+                        break; // Super deep cleaning takes precedence
+                    }
+                    else if (extraService.IsDeepCleaning && priceMultiplier == 1.0m)
+                    {
+                        priceMultiplier = extraService.PriceMultiplier;
+                        deepCleaningFee = extraService.Price;
+                    }
+                }
+            }
+
             // Update services
             _context.OrderServices.RemoveRange(order.OrderServices);
 
-            decimal newSubTotal = order.ServiceType.BasePrice;
+            decimal newSubTotal = order.ServiceType.BasePrice * priceMultiplier;
             int newTotalDuration = 0;
 
             foreach (var serviceDto in updateOrderDto.Services)
@@ -98,7 +137,7 @@ namespace DreamCleaningBackend.Services
                         Order = order,
                         ServiceId = serviceDto.ServiceId,
                         Quantity = serviceDto.Quantity,
-                        Cost = service.Cost * serviceDto.Quantity,
+                        Cost = service.Cost * serviceDto.Quantity * priceMultiplier,
                         Duration = service.TimeDuration * serviceDto.Quantity,
                         CreatedAt = DateTime.UtcNow
                     };
@@ -116,9 +155,31 @@ namespace DreamCleaningBackend.Services
                 var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
                 if (extraService != null)
                 {
-                    var cost = extraService.HasHours
-                        ? extraService.Price * extraServiceDto.Hours
-                        : extraService.Price * extraServiceDto.Quantity;
+                    decimal cost = 0;
+
+                    // For deep cleaning services, store their actual price
+                    if (extraService.IsDeepCleaning || extraService.IsSuperDeepCleaning)
+                    {
+                        cost = extraService.Price;
+                    }
+                    else
+                    {
+                        // Regular extra services
+                        var currentMultiplier = extraService.IsSameDayService ? 1.0m : priceMultiplier;
+
+                        if (extraService.HasHours && extraServiceDto.Hours > 0)
+                        {
+                            cost = extraService.Price * extraServiceDto.Hours * currentMultiplier;
+                        }
+                        else if (extraService.HasQuantity && extraServiceDto.Quantity > 0)
+                        {
+                            cost = extraService.Price * extraServiceDto.Quantity * currentMultiplier;
+                        }
+                        else if (!extraService.HasHours && !extraService.HasQuantity)
+                        {
+                            cost = extraService.Price * currentMultiplier;
+                        }
+                    }
 
                     var orderExtraService = new OrderExtraService
                     {
@@ -131,10 +192,18 @@ namespace DreamCleaningBackend.Services
                         CreatedAt = DateTime.UtcNow
                     };
                     order.OrderExtraServices.Add(orderExtraService);
-                    newSubTotal += cost;
+
+                    // Only add non-deep-cleaning costs to subtotal
+                    if (!extraService.IsDeepCleaning && !extraService.IsSuperDeepCleaning)
+                    {
+                        newSubTotal += cost;
+                    }
                     newTotalDuration += orderExtraService.Duration;
                 }
             }
+
+            // Add deep cleaning fee AFTER all other calculations
+            newSubTotal += deepCleaningFee;
 
             // Recalculate totals
             order.SubTotal = newSubTotal;
@@ -144,6 +213,12 @@ namespace DreamCleaningBackend.Services
             var discountedSubTotal = newSubTotal - order.DiscountAmount;
             order.Tax = discountedSubTotal * 0.088m; // 8.8% tax
             order.Total = discountedSubTotal + order.Tax + order.Tips;
+
+            // Final check to ensure the new total is not less than the original
+            if (order.Total < originalTotal)
+            {
+                throw new Exception($"Cannot save changes. The new total (${order.Total:F2}) is less than the original amount paid (${originalTotal:F2}). Please add more services or keep the current selection.");
+            }
 
             await _orderRepository.UpdateAsync(order);
             await _orderRepository.SaveChangesAsync();
@@ -207,31 +282,35 @@ namespace DreamCleaningBackend.Services
                         {
                             priceMultiplier = extraService.PriceMultiplier;
                             deepCleaningFee = extraService.Price;
-                            break; // Super deep cleaning takes precedence
+                            Console.WriteLine($"Found Super Deep Cleaning: Multiplier={priceMultiplier}, Fee=${deepCleaningFee}");
+                            break;
                         }
                         else if (extraService.IsDeepCleaning && priceMultiplier == 1.0m)
                         {
                             priceMultiplier = extraService.PriceMultiplier;
                             deepCleaningFee = extraService.Price;
+                            Console.WriteLine($"Found Deep Cleaning: Multiplier={priceMultiplier}, Fee=${deepCleaningFee}");
                         }
                     }
                 }
             }
 
             // Add base price from service type with multiplier
+            var basePrice = 0m;
             if (order.ServiceType != null)
             {
-                newSubTotal = order.ServiceType.BasePrice * priceMultiplier;
+                basePrice = order.ServiceType.BasePrice;
             }
             else
             {
-                // If ServiceType is null, try to load it
                 var serviceType = await _context.ServiceTypes.FindAsync(order.ServiceTypeId);
                 if (serviceType != null)
                 {
-                    newSubTotal = serviceType.BasePrice * priceMultiplier;
+                    basePrice = serviceType.BasePrice;
                 }
             }
+            newSubTotal = basePrice * priceMultiplier;
+            Console.WriteLine($"Base price: ${basePrice} x {priceMultiplier} = ${newSubTotal}");
 
             // Calculate services cost
             if (updateOrderDto.Services != null && updateOrderDto.Services.Any())
@@ -241,14 +320,16 @@ namespace DreamCleaningBackend.Services
                     var service = await _context.Services.FindAsync(serviceDto.ServiceId);
                     if (service != null)
                     {
-                        // Special handling for office cleaning
-                        if (service.ServiceKey == "cleaners" && order.ServiceType?.Name == "Office Cleaning")
+                        Console.WriteLine($"Processing service: {service.Name} (Key: {service.ServiceKey}, RelationType: {service.ServiceRelationType})");
+
+                        // Special handling for office cleaning with cleaners/hours relationship
+                        if (service.ServiceRelationType == "cleaner")
                         {
                             // Find the hours service
                             var hoursServiceDto = updateOrderDto.Services.FirstOrDefault(s =>
                             {
                                 var svc = _context.Services.Find(s.ServiceId);
-                                return svc?.ServiceKey == "hours";
+                                return svc?.ServiceRelationType == "hours" && svc.ServiceTypeId == service.ServiceTypeId;
                             });
 
                             if (hoursServiceDto != null)
@@ -256,18 +337,48 @@ namespace DreamCleaningBackend.Services
                                 var hours = hoursServiceDto.Quantity;
                                 var cleaners = serviceDto.Quantity;
                                 var costPerCleanerPerHour = service.Cost * priceMultiplier;
-                                newSubTotal += costPerCleanerPerHour * cleaners * hours;
+                                var totalCost = costPerCleanerPerHour * cleaners * hours;
+                                newSubTotal += totalCost;
+                                Console.WriteLine($"  Cleaners calculation: {cleaners} cleaners x {hours} hours x ${costPerCleanerPerHour}/hour = ${totalCost}");
+                            }
+                            else
+                            {
+                                var cost = service.Cost * serviceDto.Quantity * priceMultiplier;
+                                newSubTotal += cost;
+                                Console.WriteLine($"  Cleaner only: {serviceDto.Quantity} x ${service.Cost} x {priceMultiplier} = ${cost}");
+                            }
+                        }
+                        else if (service.ServiceRelationType == "hours")
+                        {
+                            // Check if there's a cleaner service
+                            var hasCleanerService = updateOrderDto.Services.Any(s =>
+                            {
+                                var svc = _context.Services.Find(s.ServiceId);
+                                return svc?.ServiceRelationType == "cleaner" && svc.ServiceTypeId == service.ServiceTypeId;
+                            });
+
+                            if (!hasCleanerService)
+                            {
+                                var cost = service.Cost * serviceDto.Quantity * priceMultiplier;
+                                newSubTotal += cost;
+                                Console.WriteLine($"  Hours standalone: {serviceDto.Quantity} x ${service.Cost} x {priceMultiplier} = ${cost}");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"  Hours skipped (handled with cleaners)");
                             }
                         }
                         else if (service.ServiceKey == "bedrooms" && serviceDto.Quantity == 0)
                         {
-                            // Studio apartment - flat rate
-                            newSubTotal += 20 * priceMultiplier;
+                            var cost = 20 * priceMultiplier;
+                            newSubTotal += cost;
+                            Console.WriteLine($"  Studio: $20 x {priceMultiplier} = ${cost}");
                         }
-                        else if (service.ServiceKey != "hours")
+                        else
                         {
-                            // Regular service calculation
-                            newSubTotal += service.Cost * serviceDto.Quantity * priceMultiplier;
+                            var cost = service.Cost * serviceDto.Quantity * priceMultiplier;
+                            newSubTotal += cost;
+                            Console.WriteLine($"  Regular service: {serviceDto.Quantity} x ${service.Cost} x {priceMultiplier} = ${cost}");
                         }
                     }
                 }
@@ -281,51 +392,65 @@ namespace DreamCleaningBackend.Services
                     var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
                     if (extraService != null)
                     {
-                        // Don't add cost for deep cleaning services as they affect the multiplier
+                        Console.WriteLine($"Processing extra service: {extraService.Name}");
+
                         if (!extraService.IsDeepCleaning && !extraService.IsSuperDeepCleaning)
                         {
-                            // Apply multiplier EXCEPT for Same Day Service
                             var currentMultiplier = extraService.IsSameDayService ? 1.0m : priceMultiplier;
 
                             if (extraService.HasHours && extraServiceDto.Hours > 0)
                             {
-                                newSubTotal += extraService.Price * extraServiceDto.Hours * currentMultiplier;
+                                var cost = extraService.Price * extraServiceDto.Hours * currentMultiplier;
+                                newSubTotal += cost;
+                                Console.WriteLine($"  Hours-based: {extraServiceDto.Hours}h x ${extraService.Price} x {currentMultiplier} = ${cost}");
                             }
                             else if (extraService.HasQuantity && extraServiceDto.Quantity > 0)
                             {
-                                newSubTotal += extraService.Price * extraServiceDto.Quantity * currentMultiplier;
+                                var cost = extraService.Price * extraServiceDto.Quantity * currentMultiplier;
+                                newSubTotal += cost;
+                                Console.WriteLine($"  Quantity-based: {extraServiceDto.Quantity} x ${extraService.Price} x {currentMultiplier} = ${cost}");
                             }
                             else if (!extraService.HasHours && !extraService.HasQuantity)
                             {
-                                // Fixed price service
-                                newSubTotal += extraService.Price * currentMultiplier;
+                                var cost = extraService.Price * currentMultiplier;
+                                newSubTotal += cost;
+                                Console.WriteLine($"  Fixed price: ${extraService.Price} x {currentMultiplier} = ${cost}");
                             }
                         }
-                        // Deep cleaning services don't add their cost here
+                        else
+                        {
+                            Console.WriteLine($"  Deep cleaning service - no direct cost added");
+                        }
                     }
                 }
             }
 
             // Add deep cleaning fee AFTER all calculations
             newSubTotal += deepCleaningFee;
+            Console.WriteLine($"Added deep cleaning fee: ${deepCleaningFee}");
+            Console.WriteLine($"Final SubTotal: ${newSubTotal}");
 
-            // Apply original discount amount (not percentage, to keep the same discount)
+            // Apply original discount amount
             var discountedSubTotal = newSubTotal - order.DiscountAmount;
-
-            // Make sure we don't go negative
             if (discountedSubTotal < 0)
             {
                 discountedSubTotal = 0;
             }
 
-            var newTax = discountedSubTotal * 0.088m; // 8.8% tax
+            var newTax = discountedSubTotal * 0.088m;
             var newTotal = discountedSubTotal + newTax + updateOrderDto.Tips;
 
-            // Calculate the difference
-            var additionalAmount = newTotal - order.Total;
+            Console.WriteLine($"CalculateAdditionalAmount Summary:");
+            Console.WriteLine($"  New SubTotal: ${newSubTotal}");
+            Console.WriteLine($"  Discount Amount: ${order.DiscountAmount}");
+            Console.WriteLine($"  Discounted SubTotal: ${discountedSubTotal}");
+            Console.WriteLine($"  New Tax: ${newTax}");
+            Console.WriteLine($"  Tips: ${updateOrderDto.Tips}");
+            Console.WriteLine($"  New Total: ${newTotal}");
+            Console.WriteLine($"  Original Total: ${order.Total}");
+            Console.WriteLine($"  Additional Amount: ${newTotal - order.Total}");
 
-            // Return the actual difference (can be negative if reducing services)
-            return additionalAmount;
+            return newTotal - order.Total;
         }
 
         public async Task<bool> MarkOrderAsDone(int orderId)

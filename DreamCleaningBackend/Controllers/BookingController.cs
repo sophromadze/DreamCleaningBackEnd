@@ -383,6 +383,7 @@ namespace DreamCleaningBackend.Controllers
                 }
 
                 // Add extra services
+                // Add extra services
                 foreach (var extraServiceDto in dto.ExtraServices)
                 {
                     var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
@@ -390,10 +391,14 @@ namespace DreamCleaningBackend.Controllers
                     {
                         decimal cost = 0;
 
-                        // Don't add cost for deep cleaning services as they affect the multiplier
-                        if (!extraService.IsDeepCleaning && !extraService.IsSuperDeepCleaning)
+                        // For deep cleaning services, store their actual price
+                        if (extraService.IsDeepCleaning || extraService.IsSuperDeepCleaning)
                         {
-                            // Apply multiplier EXCEPT for Same Day Service
+                            cost = extraService.Price; // Store the actual deep cleaning fee
+                        }
+                        else
+                        {
+                            // Regular extra services - apply multiplier EXCEPT for Same Day Service
                             var currentMultiplier = extraService.IsSameDayService ? 1.0m : priceMultiplier;
 
                             if (extraService.HasHours && extraServiceDto.Hours > 0)
@@ -409,21 +414,23 @@ namespace DreamCleaningBackend.Controllers
                                 cost = extraService.Price * currentMultiplier;
                             }
                         }
-                        // For deep cleaning services, cost is 0 here as we add the fee separately
 
                         var orderExtraService = new OrderExtraService
                         {
                             ExtraServiceId = extraServiceDto.ExtraServiceId,
                             Quantity = extraServiceDto.Quantity,
                             Hours = extraServiceDto.Hours,
-                            Cost = cost,
+                            Cost = cost, // Now this will have the actual price for deep cleaning
                             Duration = extraService.Duration,
                             CreatedAt = DateTime.UtcNow
                         };
                         order.OrderExtraServices.Add(orderExtraService);
 
-                        // Add the extra service cost to subtotal (will be 0 for deep cleaning)
-                        subTotal += cost;
+                        // Only add non-deep-cleaning costs to subtotal (deep cleaning fee is added separately)
+                        if (!extraService.IsDeepCleaning && !extraService.IsSuperDeepCleaning)
+                        {
+                            subTotal += cost;
+                        }
                         totalDuration += orderExtraService.Duration;
                     }
                 }
