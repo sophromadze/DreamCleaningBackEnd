@@ -127,23 +127,108 @@ namespace DreamCleaningBackend.Services
             decimal newSubTotal = order.ServiceType.BasePrice * priceMultiplier;
             int newTotalDuration = 0;
 
+            // Get the original hours for office cleaning
+            var originalCleanerService = order.OrderServices.FirstOrDefault(os =>
+            {
+                var svc = _context.Services.Find(os.ServiceId);
+                return svc?.ServiceRelationType == "cleaner";
+            });
+            int originalHours = originalCleanerService != null ? originalCleanerService.Duration / 60 : 0;
+
             foreach (var serviceDto in updateOrderDto.Services)
             {
                 var service = await _context.Services.FindAsync(serviceDto.ServiceId);
                 if (service != null)
                 {
-                    var orderService = new Models.OrderService
+                    decimal serviceCost = 0;
+                    int serviceDuration = 0;
+                    bool shouldAddToOrder = true;
+
+                    // Special handling for cleaner-hours relationship
+                    if (service.ServiceRelationType == "cleaner")
                     {
-                        Order = order,
-                        ServiceId = serviceDto.ServiceId,
-                        Quantity = serviceDto.Quantity,
-                        Cost = service.Cost * serviceDto.Quantity * priceMultiplier,
-                        Duration = service.TimeDuration * serviceDto.Quantity,
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    order.OrderServices.Add(orderService);
-                    newSubTotal += orderService.Cost;
-                    newTotalDuration += orderService.Duration;
+                        // Find the hours service in the update
+                        var hoursServiceDto = updateOrderDto.Services.FirstOrDefault(s =>
+                        {
+                            var svc = _context.Services.Find(s.ServiceId);
+                            return svc?.ServiceRelationType == "hours" && svc.ServiceTypeId == service.ServiceTypeId;
+                        });
+
+                        int hours = 0;
+
+                        if (hoursServiceDto != null)
+                        {
+                            hours = hoursServiceDto.Quantity;
+                        }
+                        else
+                        {
+                            // Use original hours if not in update
+                            hours = originalHours;
+                        }
+
+                        if (hours > 0)
+                        {
+                            var cleaners = serviceDto.Quantity;
+                            var costPerCleanerPerHour = service.Cost * priceMultiplier;
+                            serviceCost = costPerCleanerPerHour * cleaners * hours;
+                            serviceDuration = hours * 60; // Convert to minutes
+                        }
+                        else
+                        {
+                            // Fallback
+                            serviceCost = service.Cost * serviceDto.Quantity * priceMultiplier;
+                            serviceDuration = service.TimeDuration * serviceDto.Quantity;
+                        }
+                    }
+                    else if (service.ServiceRelationType == "hours")
+                    {
+                        // Hours service - don't add separately when used with cleaners
+                        var hasCleanerService = updateOrderDto.Services.Any(s =>
+                        {
+                            var svc = _context.Services.Find(s.ServiceId);
+                            return svc?.ServiceRelationType == "cleaner" && svc.ServiceTypeId == service.ServiceTypeId;
+                        });
+
+                        if (hasCleanerService)
+                        {
+                            shouldAddToOrder = false; // Skip adding hours separately
+                        }
+                        else
+                        {
+                            serviceCost = service.Cost * serviceDto.Quantity * priceMultiplier;
+                            serviceDuration = service.TimeDuration * serviceDto.Quantity;
+                        }
+                    }
+                    else if (service.ServiceKey == "bedrooms" && serviceDto.Quantity == 0)
+                    {
+                        // Studio apartment - flat rate
+                        serviceCost = 20 * priceMultiplier;
+                        serviceDuration = 20; // 20 minutes for studio
+                    }
+                    else
+                    {
+                        // Regular service calculation
+                        serviceCost = service.Cost * serviceDto.Quantity * priceMultiplier;
+                        serviceDuration = service.TimeDuration * serviceDto.Quantity;
+                    }
+
+                    // Add to order if it should be added
+                    if (shouldAddToOrder)
+                    {
+                        var orderService = new Models.OrderService
+                        {
+                            Order = order,
+                            ServiceId = serviceDto.ServiceId,
+                            Quantity = serviceDto.Quantity,
+                            Cost = serviceCost,
+                            Duration = serviceDuration,
+                            PriceMultiplier = priceMultiplier,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        order.OrderServices.Add(orderService);
+                        newSubTotal += serviceCost;
+                        newTotalDuration += serviceDuration;
+                    }
                 }
             }
 
@@ -264,6 +349,22 @@ namespace DreamCleaningBackend.Services
             if (order == null)
                 throw new Exception("Order not found");
 
+            // Debug: Log original order services
+            Console.WriteLine("=== Original Order Services ===");
+            foreach (var os in order.OrderServices)
+            {
+                var svc = await _context.Services.FindAsync(os.ServiceId);
+                Console.WriteLine($"Service: {svc?.Name}, Key: {svc?.ServiceKey}, RelationType: {svc?.ServiceRelationType}, Quantity: {os.Quantity}, Duration: {os.Duration}");
+            }
+
+            // Debug: Log services being sent in update
+            Console.WriteLine("=== Update DTO Services ===");
+            foreach (var serviceDto in updateOrderDto.Services)
+            {
+                var svc = await _context.Services.FindAsync(serviceDto.ServiceId);
+                Console.WriteLine($"Service: {svc?.Name}, Key: {svc?.ServiceKey}, RelationType: {svc?.ServiceRelationType}, Quantity: {serviceDto.Quantity}");
+            }
+
             // Calculate new total based on the original order's service type
             decimal newSubTotal = 0;
             decimal deepCleaningFee = 0;
@@ -325,16 +426,48 @@ namespace DreamCleaningBackend.Services
                         // Special handling for office cleaning with cleaners/hours relationship
                         if (service.ServiceRelationType == "cleaner")
                         {
-                            // Find the hours service
+                            // For office cleaning, hours might be stored with the cleaner service itself
+                            // Check if the original order has hours stored
+                            var originalCleanerService = order.OrderServices.FirstOrDefault(os => os.ServiceId == service.Id);
+
+                            // Find the hours service in the updated services
                             var hoursServiceDto = updateOrderDto.Services.FirstOrDefault(s =>
                             {
                                 var svc = _context.Services.Find(s.ServiceId);
                                 return svc?.ServiceRelationType == "hours" && svc.ServiceTypeId == service.ServiceTypeId;
                             });
 
+                            // Try to find hours service in original order
+                            var originalHoursService = order.OrderServices.FirstOrDefault(os =>
+                            {
+                                var svc = _context.Services.Find(os.ServiceId);
+                                return svc?.ServiceRelationType == "hours" && svc.ServiceTypeId == service.ServiceTypeId;
+                            });
+
+                            int hours = 0;
+
+                            // Use updated hours if provided
                             if (hoursServiceDto != null)
                             {
-                                var hours = hoursServiceDto.Quantity;
+                                hours = hoursServiceDto.Quantity;
+                                Console.WriteLine($"  Found hours in update DTO: {hours}");
+                            }
+                            // Otherwise check if original cleaner service has duration that represents total hours
+                            else if (originalCleanerService != null && originalCleanerService.Duration > 0)
+                            {
+                                // For office cleaning, duration might be total minutes (hours * 60)
+                                hours = originalCleanerService.Duration / 60;
+                                Console.WriteLine($"  Found hours from original cleaner duration: {hours} (duration: {originalCleanerService.Duration})");
+                            }
+                            // Or check original hours service
+                            else if (originalHoursService != null)
+                            {
+                                hours = originalHoursService.Quantity;
+                                Console.WriteLine($"  Found hours from original hours service: {hours}");
+                            }
+
+                            if (hours > 0)
+                            {
                                 var cleaners = serviceDto.Quantity;
                                 var costPerCleanerPerHour = service.Cost * priceMultiplier;
                                 var totalCost = costPerCleanerPerHour * cleaners * hours;
@@ -343,9 +476,10 @@ namespace DreamCleaningBackend.Services
                             }
                             else
                             {
+                                // Fallback - this shouldn't happen for office cleaning
                                 var cost = service.Cost * serviceDto.Quantity * priceMultiplier;
                                 newSubTotal += cost;
-                                Console.WriteLine($"  Cleaner only: {serviceDto.Quantity} x ${service.Cost} x {priceMultiplier} = ${cost}");
+                                Console.WriteLine($"  WARNING: No hours found for office cleaning! Using fallback: {serviceDto.Quantity} x ${service.Cost} x {priceMultiplier} = ${cost}");
                             }
                         }
                         else if (service.ServiceRelationType == "hours")
