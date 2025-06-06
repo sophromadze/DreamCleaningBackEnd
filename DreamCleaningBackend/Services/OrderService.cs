@@ -192,21 +192,6 @@ namespace DreamCleaningBackend.Services
             // Calculate new total based on the original order's service type
             decimal newSubTotal = 0;
 
-            // Add base price from service type
-            if (order.ServiceType != null)
-            {
-                newSubTotal = order.ServiceType.BasePrice;
-            }
-            else
-            {
-                // If ServiceType is null, try to load it
-                var serviceType = await _context.ServiceTypes.FindAsync(order.ServiceTypeId);
-                if (serviceType != null)
-                {
-                    newSubTotal = serviceType.BasePrice;
-                }
-            }
-
             // Check for deep cleaning multipliers in the update
             decimal priceMultiplier = 1.0m;
 
@@ -227,6 +212,21 @@ namespace DreamCleaningBackend.Services
                             priceMultiplier = extraService.PriceMultiplier;
                         }
                     }
+                }
+            }
+
+            // Add base price from service type with multiplier
+            if (order.ServiceType != null)
+            {
+                newSubTotal = order.ServiceType.BasePrice * priceMultiplier;
+            }
+            else
+            {
+                // If ServiceType is null, try to load it
+                var serviceType = await _context.ServiceTypes.FindAsync(order.ServiceTypeId);
+                if (serviceType != null)
+                {
+                    newSubTotal = serviceType.BasePrice * priceMultiplier;
                 }
             }
 
@@ -281,19 +281,27 @@ namespace DreamCleaningBackend.Services
                         // Don't add cost for deep cleaning services as they affect the multiplier
                         if (!extraService.IsDeepCleaning && !extraService.IsSuperDeepCleaning)
                         {
+                            // Apply multiplier EXCEPT for Same Day Service
+                            var currentMultiplier = extraService.IsSameDayService ? 1.0m : priceMultiplier;
+
                             if (extraService.HasHours && extraServiceDto.Hours > 0)
                             {
-                                newSubTotal += extraService.Price * extraServiceDto.Hours;
+                                newSubTotal += extraService.Price * extraServiceDto.Hours * currentMultiplier;
                             }
                             else if (extraService.HasQuantity && extraServiceDto.Quantity > 0)
                             {
-                                newSubTotal += extraService.Price * extraServiceDto.Quantity;
+                                newSubTotal += extraService.Price * extraServiceDto.Quantity * currentMultiplier;
                             }
                             else if (!extraService.HasHours && !extraService.HasQuantity)
                             {
                                 // Fixed price service
-                                newSubTotal += extraService.Price;
+                                newSubTotal += extraService.Price * currentMultiplier;
                             }
+                        }
+                        else
+                        {
+                            // Deep cleaning services - add their base price as a fee
+                            newSubTotal += extraService.Price;
                         }
                     }
                 }

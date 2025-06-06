@@ -355,17 +355,20 @@ namespace DreamCleaningBackend.Controllers
                         // Don't add cost for deep cleaning services as they affect the multiplier
                         if (!extraService.IsDeepCleaning && !extraService.IsSuperDeepCleaning)
                         {
+                            // Apply multiplier EXCEPT for Same Day Service
+                            var currentMultiplier = extraService.IsSameDayService ? 1.0m : priceMultiplier;
+
                             if (extraService.HasHours && extraServiceDto.Hours > 0)
                             {
-                                cost = extraService.Price * extraServiceDto.Hours;
+                                cost = extraService.Price * extraServiceDto.Hours * currentMultiplier;
                             }
                             else if (extraService.HasQuantity && extraServiceDto.Quantity > 0)
                             {
-                                cost = extraService.Price * extraServiceDto.Quantity;
+                                cost = extraService.Price * extraServiceDto.Quantity * currentMultiplier;
                             }
                             else if (!extraService.HasHours && !extraService.HasQuantity)
                             {
-                                cost = extraService.Price;
+                                cost = extraService.Price * currentMultiplier;
                             }
                         }
                         // For deep cleaning services, the cost is their base price (they provide multiplier effect)
