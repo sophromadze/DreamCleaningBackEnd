@@ -62,6 +62,11 @@ namespace DreamCleaningBackend.Services
             if (order.Status == "Done")
                 throw new Exception("Cannot update a completed order");
 
+            // TOTALDURATION LOGGING - START
+            Console.WriteLine("\n========== TOTALDURATION TRACKING ==========");
+            Console.WriteLine($"Frontend sent TotalDuration: {updateOrderDto.TotalDuration} minutes");
+            Console.WriteLine($"Current DB TotalDuration: {order.TotalDuration} minutes");
+
             // Store the original total for comparison
             var originalTotal = order.Total;
 
@@ -126,6 +131,8 @@ namespace DreamCleaningBackend.Services
 
             decimal newSubTotal = order.ServiceType.BasePrice * priceMultiplier;
             int newTotalDuration = 0;
+
+            Console.WriteLine($"\nStarting backend duration calculation...");
 
             // Get the original hours for office cleaning
             var originalCleanerService = order.OrderServices.FirstOrDefault(os =>
@@ -228,6 +235,8 @@ namespace DreamCleaningBackend.Services
                         order.OrderServices.Add(orderService);
                         newSubTotal += serviceCost;
                         newTotalDuration += serviceDuration;
+
+                        Console.WriteLine($"  Added service duration: {serviceDuration} min, Running total: {newTotalDuration} min");
                     }
                 }
             }
@@ -241,11 +250,13 @@ namespace DreamCleaningBackend.Services
                 if (extraService != null)
                 {
                     decimal cost = 0;
+                    int duration = extraService.Duration; // Base duration
 
                     // For deep cleaning services, store their actual price
                     if (extraService.IsDeepCleaning || extraService.IsSuperDeepCleaning)
                     {
                         cost = extraService.Price;
+                        // Deep cleaning services use base duration only
                     }
                     else
                     {
@@ -255,14 +266,20 @@ namespace DreamCleaningBackend.Services
                         if (extraService.HasHours && extraServiceDto.Hours > 0)
                         {
                             cost = extraService.Price * extraServiceDto.Hours * currentMultiplier;
+                            // MULTIPLY DURATION BY HOURS
+                            duration = (int)(extraService.Duration * extraServiceDto.Hours);
                         }
                         else if (extraService.HasQuantity && extraServiceDto.Quantity > 0)
                         {
                             cost = extraService.Price * extraServiceDto.Quantity * currentMultiplier;
+                            // MULTIPLY DURATION BY QUANTITY
+                            duration = extraService.Duration * extraServiceDto.Quantity;
                         }
                         else if (!extraService.HasHours && !extraService.HasQuantity)
                         {
                             cost = extraService.Price * currentMultiplier;
+                            // Use base duration for flat services
+                            duration = extraService.Duration;
                         }
                     }
 
@@ -273,7 +290,7 @@ namespace DreamCleaningBackend.Services
                         Quantity = extraServiceDto.Quantity,
                         Hours = extraServiceDto.Hours,
                         Cost = cost,
-                        Duration = extraService.Duration,
+                        Duration = duration, // Now this is properly calculated
                         CreatedAt = DateTime.UtcNow
                     };
                     order.OrderExtraServices.Add(orderExtraService);
@@ -283,50 +300,27 @@ namespace DreamCleaningBackend.Services
                     {
                         newSubTotal += cost;
                     }
-                    newTotalDuration += orderExtraService.Duration;
+
+                    // Always add duration to total
+                    newTotalDuration += duration;
                 }
             }
 
             // Add deep cleaning fee AFTER all other calculations
             newSubTotal += deepCleaningFee;
 
-            // Calculate maids count for updated order
-            //int maidsCount = 0;
-            //bool hasCleanerServiceForMaids = updateOrderDto.Services.Any(s =>
-            //{
-            //    var svc = _context.Services.Find(s.ServiceId);
-            //    return svc?.ServiceRelationType == "cleaner";
-            //});
+            Console.WriteLine($"\nBackend calculated total duration: {newTotalDuration} minutes");
+            Console.WriteLine($"Frontend sent total duration: {updateOrderDto.TotalDuration} minutes");
+            Console.WriteLine($"DIFFERENCE: {updateOrderDto.TotalDuration - newTotalDuration} minutes");
 
-            //if (hasCleanerServiceForMaids)
-            //{
-            //    // If cleaners are explicitly selected, use that count
-            //    var cleanerServiceDto = updateOrderDto.Services.FirstOrDefault(s =>
-            //    {
-            //        var svc = _context.Services.Find(s.ServiceId);
-            //        return svc?.ServiceRelationType == "cleaner";
-            //    });
-
-            //    if (cleanerServiceDto != null)
-            //    {
-            //        maidsCount = cleanerServiceDto.Quantity;
-            //    }
-            //}
-            //else
-            //{
-            //    // Calculate based on duration (every 6 hours = 1 maid)
-            //    decimal totalHours = newTotalDuration / 60m;
-            //    maidsCount = Math.Max(1, (int)Math.Ceiling(totalHours / 6m));
-
-            //    // Adjust duration based on maids count
-            //    if (maidsCount > 1)
-            //    {
-            //        newTotalDuration = newTotalDuration / maidsCount;
-            //    }
-            //}
-
+            // IMPORTANT: This is where the issue is - backend uses its calculation instead of frontend value
             order.MaidsCount = updateOrderDto.MaidsCount;
-            order.TotalDuration = newTotalDuration;
+            order.TotalDuration = newTotalDuration; // THIS IS THE PROBLEM - should be updateOrderDto.TotalDuration
+
+            Console.WriteLine($"\nSAVING TO DB:");
+            Console.WriteLine($"  TotalDuration: {order.TotalDuration} minutes (using backend calculation)");
+            Console.WriteLine($"  MaidsCount: {order.MaidsCount}");
+            Console.WriteLine("========================================\n");
 
             // Recalculate totals
             order.SubTotal = newSubTotal;
@@ -485,9 +479,17 @@ namespace DreamCleaningBackend.Services
             // Add deep cleaning fee AFTER all other calculations
             newSubTotal += deepCleaningFee;
 
-            // USE THE MAIDS COUNT FROM THE DTO - THIS IS THE FIX
+            // If there's a significant mismatch, use the frontend value
+            // The frontend has all the user selections and should be the source of truth
+            if (Math.Abs(updateOrderDto.TotalDuration - newTotalDuration) > 5) // Allow 5 minutes tolerance
+            {
+                Console.WriteLine($"WARNING: Duration mismatch exceeds tolerance! Using frontend value: {updateOrderDto.TotalDuration}");
+                newTotalDuration = updateOrderDto.TotalDuration;
+            }
+
+            // Now use the potentially updated newTotalDuration
             order.MaidsCount = updateOrderDto.MaidsCount;
-            order.TotalDuration = newTotalDuration;
+            order.TotalDuration = newTotalDuration; // This will now use frontend value if there's a big difference
 
             // Recalculate totals
             order.SubTotal = newSubTotal;

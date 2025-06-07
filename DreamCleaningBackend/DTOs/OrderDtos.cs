@@ -67,6 +67,7 @@ namespace DreamCleaningBackend.DTOs
         public DateTime ServiceDate { get; set; }
         public string ServiceTime { get; set; }
         public int MaidsCount { get; set; }
+        public int TotalDuration { get; set; }
         public string EntryMethod { get; set; }
         public string? SpecialInstructions { get; set; }
         public string ContactFirstName { get; set; }
