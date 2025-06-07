@@ -540,9 +540,47 @@ namespace DreamCleaningBackend.Controllers
                     }
                 }
 
-                // Log the MaidsCount
-                Console.WriteLine($"MaidsCount: {order.MaidsCount}");
+                if (dto.DiscountAmount > 0)
+                {
+                    order.DiscountAmount = dto.DiscountAmount;
+                    Console.WriteLine($"Using frontend discount amount: ${dto.DiscountAmount}");
+                }
+                else
+                {
+                    // Only calculate discount if not provided by frontend
+                    order.DiscountAmount = 0;
 
+                    // Apply frequency discount
+                    if (frequency != null && frequency.DiscountPercentage > 0)
+                    {
+                        order.DiscountAmount += subTotal * (frequency.DiscountPercentage / 100m);
+                    }
+
+                    // Apply first time discount (20%) if promo code is "firstUse"
+                    if (dto.PromoCode == "firstUse" && user.FirstTimeOrder)
+                    {
+                        order.DiscountAmount += subTotal * 0.20m;
+                    }
+
+                    // Apply promo code discount
+                    if (!string.IsNullOrEmpty(dto.PromoCode) && dto.PromoCode != "firstUse")
+                    {
+                        var promoCode = await _context.PromoCodes
+                            .FirstOrDefaultAsync(p => p.Code == dto.PromoCode && p.IsActive);
+
+                        if (promoCode != null)
+                        {
+                            if (promoCode.IsPercentage)
+                            {
+                                order.DiscountAmount += subTotal * (promoCode.DiscountValue / 100m);
+                            }
+                            else
+                            {
+                                order.DiscountAmount += promoCode.DiscountValue;
+                            }
+                        }
+                    }
+                }
 
                 // Complete order calculations
                 order.SubTotal = subTotal;
@@ -594,6 +632,17 @@ namespace DreamCleaningBackend.Controllers
 
                 if (order.IsPaid)
                     return BadRequest(new { message = "Order is already paid" });
+
+                // Check if this order used first-time discount
+                if (order.PromoCode == "firstUse")
+                {
+                    var user = await _context.Users.FindAsync(userId);
+                    if (user != null && user.FirstTimeOrder)
+                    {
+                        user.FirstTimeOrder = false;
+                        user.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
 
                 // Simulate payment completion
                 order.IsPaid = true;

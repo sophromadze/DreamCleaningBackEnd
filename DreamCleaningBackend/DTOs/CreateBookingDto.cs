@@ -62,5 +62,7 @@ namespace DreamCleaningBackend.DTOs
         public decimal Tips { get; set; }
         public int MaidsCount { get; set; }
         public int TotalDuration { get; set; }
+        public decimal DiscountAmount { get; set; }
+        public decimal SubTotal { get; set; }
     }
 }
