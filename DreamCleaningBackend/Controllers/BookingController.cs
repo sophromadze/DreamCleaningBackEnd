@@ -252,6 +252,7 @@ namespace DreamCleaningBackend.Controllers
                     City = dto.City,
                     State = dto.State,
                     ZipCode = dto.ZipCode,
+                    MaidsCount = dto.MaidsCount,
                     ApartmentId = dto.ApartmentId,
                     PromoCode = dto.PromoCode,
                     Tips = dto.Tips,

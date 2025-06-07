@@ -291,41 +291,41 @@ namespace DreamCleaningBackend.Services
             newSubTotal += deepCleaningFee;
 
             // Calculate maids count for updated order
-            int maidsCount = 0;
-            bool hasCleanerServiceForMaids = updateOrderDto.Services.Any(s =>
-            {
-                var svc = _context.Services.Find(s.ServiceId);
-                return svc?.ServiceRelationType == "cleaner";
-            });
+            //int maidsCount = 0;
+            //bool hasCleanerServiceForMaids = updateOrderDto.Services.Any(s =>
+            //{
+            //    var svc = _context.Services.Find(s.ServiceId);
+            //    return svc?.ServiceRelationType == "cleaner";
+            //});
 
-            if (hasCleanerServiceForMaids)
-            {
-                // If cleaners are explicitly selected, use that count
-                var cleanerServiceDto = updateOrderDto.Services.FirstOrDefault(s =>
-                {
-                    var svc = _context.Services.Find(s.ServiceId);
-                    return svc?.ServiceRelationType == "cleaner";
-                });
+            //if (hasCleanerServiceForMaids)
+            //{
+            //    // If cleaners are explicitly selected, use that count
+            //    var cleanerServiceDto = updateOrderDto.Services.FirstOrDefault(s =>
+            //    {
+            //        var svc = _context.Services.Find(s.ServiceId);
+            //        return svc?.ServiceRelationType == "cleaner";
+            //    });
 
-                if (cleanerServiceDto != null)
-                {
-                    maidsCount = cleanerServiceDto.Quantity;
-                }
-            }
-            else
-            {
-                // Calculate based on duration (every 6 hours = 1 maid)
-                decimal totalHours = newTotalDuration / 60m;
-                maidsCount = Math.Max(1, (int)Math.Ceiling(totalHours / 6m));
+            //    if (cleanerServiceDto != null)
+            //    {
+            //        maidsCount = cleanerServiceDto.Quantity;
+            //    }
+            //}
+            //else
+            //{
+            //    // Calculate based on duration (every 6 hours = 1 maid)
+            //    decimal totalHours = newTotalDuration / 60m;
+            //    maidsCount = Math.Max(1, (int)Math.Ceiling(totalHours / 6m));
 
-                // Adjust duration based on maids count
-                if (maidsCount > 1)
-                {
-                    newTotalDuration = newTotalDuration / maidsCount;
-                }
-            }
+            //    // Adjust duration based on maids count
+            //    if (maidsCount > 1)
+            //    {
+            //        newTotalDuration = newTotalDuration / maidsCount;
+            //    }
+            //}
 
-            order.MaidsCount = maidsCount;
+            order.MaidsCount = updateOrderDto.MaidsCount;
             order.TotalDuration = newTotalDuration;
 
             // Recalculate totals
@@ -386,234 +386,129 @@ namespace DreamCleaningBackend.Services
             if (order == null)
                 throw new Exception("Order not found");
 
-            // Debug: Log original order services
-            Console.WriteLine("=== Original Order Services ===");
-            foreach (var os in order.OrderServices)
-            {
-                var svc = await _context.Services.FindAsync(os.ServiceId);
-                Console.WriteLine($"Service: {svc?.Name}, Key: {svc?.ServiceKey}, RelationType: {svc?.ServiceRelationType}, Quantity: {os.Quantity}, Duration: {os.Duration}");
-            }
-
-            // Debug: Log services being sent in update
-            Console.WriteLine("=== Update DTO Services ===");
-            foreach (var serviceDto in updateOrderDto.Services)
-            {
-                var svc = await _context.Services.FindAsync(serviceDto.ServiceId);
-                Console.WriteLine($"Service: {svc?.Name}, Key: {svc?.ServiceKey}, RelationType: {svc?.ServiceRelationType}, Quantity: {serviceDto.Quantity}");
-            }
-
-            // Calculate new total based on the original order's service type
-            decimal newSubTotal = 0;
+            // Calculate price multiplier from extra services FIRST
+            decimal priceMultiplier = 1.0m;
             decimal deepCleaningFee = 0;
 
-            // Check for deep cleaning multipliers in the update
-            decimal priceMultiplier = 1.0m;
-
-            if (updateOrderDto.ExtraServices != null)
+            foreach (var extraServiceDto in updateOrderDto.ExtraServices)
             {
-                foreach (var extraServiceDto in updateOrderDto.ExtraServices)
+                var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
+                if (extraService != null)
                 {
-                    var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
-                    if (extraService != null)
+                    if (extraService.IsSuperDeepCleaning)
                     {
-                        if (extraService.IsSuperDeepCleaning)
-                        {
-                            priceMultiplier = extraService.PriceMultiplier;
-                            deepCleaningFee = extraService.Price;
-                            Console.WriteLine($"Found Super Deep Cleaning: Multiplier={priceMultiplier}, Fee=${deepCleaningFee}");
-                            break;
-                        }
-                        else if (extraService.IsDeepCleaning && priceMultiplier == 1.0m)
-                        {
-                            priceMultiplier = extraService.PriceMultiplier;
-                            deepCleaningFee = extraService.Price;
-                            Console.WriteLine($"Found Deep Cleaning: Multiplier={priceMultiplier}, Fee=${deepCleaningFee}");
-                        }
+                        priceMultiplier = extraService.PriceMultiplier;
+                        deepCleaningFee = extraService.Price;
+                        break; // Super deep cleaning takes precedence
+                    }
+                    else if (extraService.IsDeepCleaning && priceMultiplier == 1.0m)
+                    {
+                        priceMultiplier = extraService.PriceMultiplier;
+                        deepCleaningFee = extraService.Price;
                     }
                 }
             }
 
-            // Add base price from service type with multiplier
-            var basePrice = 0m;
-            if (order.ServiceType != null)
-            {
-                basePrice = order.ServiceType.BasePrice;
-            }
-            else
-            {
-                var serviceType = await _context.ServiceTypes.FindAsync(order.ServiceTypeId);
-                if (serviceType != null)
-                {
-                    basePrice = serviceType.BasePrice;
-                }
-            }
-            newSubTotal = basePrice * priceMultiplier;
-            Console.WriteLine($"Base price: ${basePrice} x {priceMultiplier} = ${newSubTotal}");
+            // Calculate new subtotal
+            decimal newSubTotal = order.ServiceType.BasePrice * priceMultiplier;
+            int newTotalDuration = 0;
 
-            // Calculate services cost
-            if (updateOrderDto.Services != null && updateOrderDto.Services.Any())
+            // Process services
+            foreach (var serviceDto in updateOrderDto.Services)
             {
-                foreach (var serviceDto in updateOrderDto.Services)
+                var service = await _context.Services.FindAsync(serviceDto.ServiceId);
+                if (service != null)
                 {
-                    var service = await _context.Services.FindAsync(serviceDto.ServiceId);
-                    if (service != null)
+                    decimal cost = 0;
+                    int duration = 0;
+
+                    if (service.ServiceRelationType == "hours")
                     {
-                        Console.WriteLine($"Processing service: {service.Name} (Key: {service.ServiceKey}, RelationType: {service.ServiceRelationType})");
-
-                        // Special handling for office cleaning with cleaners/hours relationship
-                        if (service.ServiceRelationType == "cleaner")
+                        var cleanerService = updateOrderDto.Services.FirstOrDefault(s =>
                         {
-                            // For office cleaning, hours might be stored with the cleaner service itself
-                            // Check if the original order has hours stored
-                            var originalCleanerService = order.OrderServices.FirstOrDefault(os => os.ServiceId == service.Id);
+                            var svc = _context.Services.Find(s.ServiceId);
+                            return svc?.ServiceRelationType == "cleaner" && svc.ServiceTypeId == service.ServiceTypeId;
+                        });
 
-                            // Find the hours service in the updated services
-                            var hoursServiceDto = updateOrderDto.Services.FirstOrDefault(s =>
-                            {
-                                var svc = _context.Services.Find(s.ServiceId);
-                                return svc?.ServiceRelationType == "hours" && svc.ServiceTypeId == service.ServiceTypeId;
-                            });
-
-                            // Try to find hours service in original order
-                            var originalHoursService = order.OrderServices.FirstOrDefault(os =>
-                            {
-                                var svc = _context.Services.Find(os.ServiceId);
-                                return svc?.ServiceRelationType == "hours" && svc.ServiceTypeId == service.ServiceTypeId;
-                            });
-
-                            int hours = 0;
-
-                            // Use updated hours if provided
-                            if (hoursServiceDto != null)
-                            {
-                                hours = hoursServiceDto.Quantity;
-                                Console.WriteLine($"  Found hours in update DTO: {hours}");
-                            }
-                            // Otherwise check if original cleaner service has duration that represents total hours
-                            else if (originalCleanerService != null && originalCleanerService.Duration > 0)
-                            {
-                                // For office cleaning, duration might be total minutes (hours * 60)
-                                hours = originalCleanerService.Duration / 60;
-                                Console.WriteLine($"  Found hours from original cleaner duration: {hours} (duration: {originalCleanerService.Duration})");
-                            }
-                            // Or check original hours service
-                            else if (originalHoursService != null)
-                            {
-                                hours = originalHoursService.Quantity;
-                                Console.WriteLine($"  Found hours from original hours service: {hours}");
-                            }
-
-                            if (hours > 0)
-                            {
-                                var cleaners = serviceDto.Quantity;
-                                var costPerCleanerPerHour = service.Cost * priceMultiplier;
-                                var totalCost = costPerCleanerPerHour * cleaners * hours;
-                                newSubTotal += totalCost;
-                                Console.WriteLine($"  Cleaners calculation: {cleaners} cleaners x {hours} hours x ${costPerCleanerPerHour}/hour = ${totalCost}");
-                            }
-                            else
-                            {
-                                // Fallback - this shouldn't happen for office cleaning
-                                var cost = service.Cost * serviceDto.Quantity * priceMultiplier;
-                                newSubTotal += cost;
-                                Console.WriteLine($"  WARNING: No hours found for office cleaning! Using fallback: {serviceDto.Quantity} x ${service.Cost} x {priceMultiplier} = ${cost}");
-                            }
-                        }
-                        else if (service.ServiceRelationType == "hours")
+                        if (cleanerService != null)
                         {
-                            // Check if there's a cleaner service
-                            var hasCleanerService = updateOrderDto.Services.Any(s =>
-                            {
-                                var svc = _context.Services.Find(s.ServiceId);
-                                return svc?.ServiceRelationType == "cleaner" && svc.ServiceTypeId == service.ServiceTypeId;
-                            });
-
-                            if (!hasCleanerService)
-                            {
-                                var cost = service.Cost * serviceDto.Quantity * priceMultiplier;
-                                newSubTotal += cost;
-                                Console.WriteLine($"  Hours standalone: {serviceDto.Quantity} x ${service.Cost} x {priceMultiplier} = ${cost}");
-                            }
-                            else
-                            {
-                                Console.WriteLine($"  Hours skipped (handled with cleaners)");
-                            }
-                        }
-                        else if (service.ServiceKey == "bedrooms" && serviceDto.Quantity == 0)
-                        {
-                            var cost = 20 * priceMultiplier;
-                            newSubTotal += cost;
-                            Console.WriteLine($"  Studio: $20 x {priceMultiplier} = ${cost}");
-                        }
-                        else
-                        {
-                            var cost = service.Cost * serviceDto.Quantity * priceMultiplier;
-                            newSubTotal += cost;
-                            Console.WriteLine($"  Regular service: {serviceDto.Quantity} x ${service.Cost} x {priceMultiplier} = ${cost}");
+                            cost = service.Cost * serviceDto.Quantity * cleanerService.Quantity * priceMultiplier;
+                            duration = service.TimeDuration * serviceDto.Quantity * cleanerService.Quantity;
                         }
                     }
-                }
-            }
-
-            // Calculate extra services cost
-            if (updateOrderDto.ExtraServices != null && updateOrderDto.ExtraServices.Any())
-            {
-                foreach (var extraServiceDto in updateOrderDto.ExtraServices)
-                {
-                    var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
-                    if (extraService != null)
+                    else if (service.Cost > 0)
                     {
-                        Console.WriteLine($"Processing extra service: {extraService.Name}");
-
-                        if (!extraService.IsDeepCleaning && !extraService.IsSuperDeepCleaning)
-                        {
-                            var currentMultiplier = extraService.IsSameDayService ? 1.0m : priceMultiplier;
-
-                            if (extraService.HasHours && extraServiceDto.Hours > 0)
-                            {
-                                var cost = extraService.Price * extraServiceDto.Hours * currentMultiplier;
-                                newSubTotal += cost;
-                                Console.WriteLine($"  Hours-based: {extraServiceDto.Hours}h x ${extraService.Price} x {currentMultiplier} = ${cost}");
-                            }
-                            else if (extraService.HasQuantity && extraServiceDto.Quantity > 0)
-                            {
-                                var cost = extraService.Price * extraServiceDto.Quantity * currentMultiplier;
-                                newSubTotal += cost;
-                                Console.WriteLine($"  Quantity-based: {extraServiceDto.Quantity} x ${extraService.Price} x {currentMultiplier} = ${cost}");
-                            }
-                            else if (!extraService.HasHours && !extraService.HasQuantity)
-                            {
-                                var cost = extraService.Price * currentMultiplier;
-                                newSubTotal += cost;
-                                Console.WriteLine($"  Fixed price: ${extraService.Price} x {currentMultiplier} = ${cost}");
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine($"  Deep cleaning service - no direct cost added");
-                        }
+                        cost = service.Cost * serviceDto.Quantity * priceMultiplier;
+                        duration = service.TimeDuration * serviceDto.Quantity;
                     }
+                    else
+                    {
+                        duration = service.TimeDuration * serviceDto.Quantity;
+                    }
+
+                    newSubTotal += cost;
+                    newTotalDuration += duration;
                 }
             }
 
-            // Add deep cleaning fee AFTER all calculations
+            // Process extra services
+            foreach (var extraServiceDto in updateOrderDto.ExtraServices)
+            {
+                var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
+                if (extraService != null)
+                {
+                    decimal cost = 0;
+
+                    if (!extraService.IsDeepCleaning && !extraService.IsSuperDeepCleaning)
+                    {
+                        var currentMultiplier = extraService.IsSameDayService ? extraService.PriceMultiplier : 1.0m;
+
+                        if (extraService.HasHours && extraServiceDto.Hours > 0)
+                        {
+                            cost = extraService.Price * extraServiceDto.Hours * currentMultiplier;
+                        }
+                        else if (extraService.HasQuantity && extraServiceDto.Quantity > 0)
+                        {
+                            cost = extraService.Price * extraServiceDto.Quantity * currentMultiplier;
+                        }
+                        else if (!extraService.HasHours && !extraService.HasQuantity)
+                        {
+                            cost = extraService.Price * currentMultiplier;
+                        }
+
+                        newSubTotal += cost;
+                    }
+                    newTotalDuration += extraService.Duration;
+                }
+            }
+
+            // Add deep cleaning fee AFTER all other calculations
             newSubTotal += deepCleaningFee;
-            Console.WriteLine($"Added deep cleaning fee: ${deepCleaningFee}");
-            Console.WriteLine($"Final SubTotal: ${newSubTotal}");
 
-            // Apply original discount amount
+            // USE THE MAIDS COUNT FROM THE DTO - THIS IS THE FIX
+            order.MaidsCount = updateOrderDto.MaidsCount;
+            order.TotalDuration = newTotalDuration;
+
+            // Recalculate totals
+            order.SubTotal = newSubTotal;
+
+            // Reapply original discount
             var discountedSubTotal = newSubTotal - order.DiscountAmount;
-            if (discountedSubTotal < 0)
-            {
-                discountedSubTotal = 0;
-            }
+            order.Tax = discountedSubTotal * 0.088m; // 8.8% tax
+            order.Total = discountedSubTotal + order.Tax + order.Tips;
 
+            // Calculate additional amount
+            var additionalAmount = order.Total - order.Total; // This will be recalculated properly
+
+            // Calculate new total with tips from DTO
             var newTax = discountedSubTotal * 0.088m;
             var newTotal = discountedSubTotal + newTax + updateOrderDto.Tips;
 
-            Console.WriteLine($"CalculateAdditionalAmount Summary:");
+            // Log for debugging
+            Console.WriteLine($"CalculateAdditionalAmount Debug:");
+            Console.WriteLine($"  Maids Count from DTO: {updateOrderDto.MaidsCount}");
             Console.WriteLine($"  New SubTotal: ${newSubTotal}");
-            Console.WriteLine($"  Discount Amount: ${order.DiscountAmount}");
+            Console.WriteLine($"  Discount: ${order.DiscountAmount}");
             Console.WriteLine($"  Discounted SubTotal: ${discountedSubTotal}");
             Console.WriteLine($"  New Tax: ${newTax}");
             Console.WriteLine($"  Tips: ${updateOrderDto.Tips}");
