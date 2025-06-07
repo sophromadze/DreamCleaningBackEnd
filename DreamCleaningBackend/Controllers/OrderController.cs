@@ -4,6 +4,8 @@ using System.Security.Claims;
 using DreamCleaningBackend.DTOs;
 using DreamCleaningBackend.Services.Interfaces;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using DreamCleaningBackend.Data;
 
 namespace DreamCleaningBackend.Controllers
 {
@@ -13,10 +15,12 @@ namespace DreamCleaningBackend.Controllers
     public class OrderController : ControllerBase
     {
         private readonly IOrderService _orderService;
+        private readonly ApplicationDbContext _context;
 
-        public OrderController(IOrderService orderService)
+        public OrderController(IOrderService orderService, ApplicationDbContext context)
         {
             _orderService = orderService;
+            _context = context;
         }
 
         [HttpGet]
@@ -78,8 +82,6 @@ namespace DreamCleaningBackend.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
-
-        // In OrderController.cs, update the CalculateAdditionalAmount method:
 
         [HttpPost("{orderId}/calculate-additional")]
         public async Task<ActionResult> CalculateAdditionalAmount(int orderId, UpdateOrderDto updateOrderDto)

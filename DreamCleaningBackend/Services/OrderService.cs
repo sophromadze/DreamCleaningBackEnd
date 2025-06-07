@@ -103,6 +103,15 @@ namespace DreamCleaningBackend.Services
             order.Tips = updateOrderDto.Tips;
             order.UpdatedAt = DateTime.UtcNow;
 
+            // Update user's phone number if they don't have one
+            var user = await _context.Users.FindAsync(userId);
+            if (user != null && string.IsNullOrEmpty(user.Phone) && !string.IsNullOrEmpty(updateOrderDto.ContactPhone))
+            {
+                user.Phone = updateOrderDto.ContactPhone;
+                user.UpdatedAt = DateTime.UtcNow;
+                Console.WriteLine($"Updated user's phone number to: {updateOrderDto.ContactPhone}");
+            }
+
             // Calculate price multiplier from extra services FIRST
             decimal priceMultiplier = 1.0m;
             decimal deepCleaningFee = 0;

@@ -240,6 +240,7 @@ namespace DreamCleaningBackend.Controllers
                 {
                     UserId = userId,
                     ServiceTypeId = dto.ServiceTypeId,
+                    ApartmentId = dto.ApartmentId,
                     ServiceAddress = dto.ServiceAddress,
                     AptSuite = dto.AptSuite,
                     City = dto.City,
@@ -616,12 +617,12 @@ namespace DreamCleaningBackend.Controllers
         // Add this method to BookingController.cs after the CreateBooking method:
 
         [HttpPost("simulate-payment/{orderId}")]
-        [Authorize]
         public async Task<ActionResult> SimulatePayment(int orderId)
         {
             try
             {
-                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userId = int.Parse(userIdClaim ?? "0");
                 if (userId == 0)
                     return Unauthorized();
 
@@ -633,15 +634,23 @@ namespace DreamCleaningBackend.Controllers
                 if (order.IsPaid)
                     return BadRequest(new { message = "Order is already paid" });
 
-                // Check if this order used first-time discount
-                if (order.PromoCode == "firstUse")
+                // Get the user
+                var user = await _context.Users.FindAsync(userId);
+                if (user != null)
                 {
-                    var user = await _context.Users.FindAsync(userId);
-                    if (user != null && user.FirstTimeOrder)
+                    // Check if this order used first-time discount
+                    if (order.PromoCode == "firstUse" && user.FirstTimeOrder)
                     {
                         user.FirstTimeOrder = false;
-                        user.UpdatedAt = DateTime.UtcNow;
                     }
+
+                    // Update user's phone number if it's empty and order has a phone number
+                    if (string.IsNullOrEmpty(user.Phone) && !string.IsNullOrEmpty(order.ContactPhone))
+                    {
+                        user.Phone = order.ContactPhone;
+                    }
+
+                    user.UpdatedAt = DateTime.UtcNow;
                 }
 
                 // Simulate payment completion
@@ -657,7 +666,8 @@ namespace DreamCleaningBackend.Controllers
                     success = true,
                     message = "Payment completed successfully",
                     orderId = order.Id,
-                    status = order.Status
+                    status = order.Status,
+                    phoneUpdated = user != null && !string.IsNullOrEmpty(order.ContactPhone) && string.IsNullOrEmpty(user.Phone)
                 });
             }
             catch (Exception ex)
