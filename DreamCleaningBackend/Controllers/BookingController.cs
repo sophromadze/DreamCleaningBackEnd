@@ -241,6 +241,7 @@ namespace DreamCleaningBackend.Controllers
                     UserId = userId,
                     ServiceTypeId = dto.ServiceTypeId,
                     ApartmentId = dto.ApartmentId,
+                    ApartmentName = dto.ApartmentName,
                     ServiceAddress = dto.ServiceAddress,
                     AptSuite = dto.AptSuite,
                     City = dto.City,
@@ -617,16 +618,18 @@ namespace DreamCleaningBackend.Controllers
         // Add this method to BookingController.cs after the CreateBooking method:
 
         [HttpPost("simulate-payment/{orderId}")]
+        [Authorize]
         public async Task<ActionResult> SimulatePayment(int orderId)
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                var userId = int.Parse(userIdClaim ?? "0");
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
                 if (userId == 0)
                     return Unauthorized();
 
-                var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
+                var order = await _context.Orders
+                    .Include(o => o.OrderServices)
+                    .FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
 
                 if (order == null)
                     return NotFound(new { message = "Order not found" });
@@ -634,23 +637,86 @@ namespace DreamCleaningBackend.Controllers
                 if (order.IsPaid)
                     return BadRequest(new { message = "Order is already paid" });
 
-                // Get the user
-                var user = await _context.Users.FindAsync(userId);
+                // Get the user to update phone number and check apartments
+                var user = await _context.Users
+                    .Include(u => u.Apartments)
+                    .FirstOrDefaultAsync(u => u.Id == userId);
+
                 if (user != null)
                 {
-                    // Check if this order used first-time discount
-                    if (order.PromoCode == "firstUse" && user.FirstTimeOrder)
-                    {
-                        user.FirstTimeOrder = false;
-                    }
-
-                    // Update user's phone number if it's empty and order has a phone number
+                    // Update phone number if needed
                     if (string.IsNullOrEmpty(user.Phone) && !string.IsNullOrEmpty(order.ContactPhone))
                     {
                         user.Phone = order.ContactPhone;
+                        user.UpdatedAt = DateTime.UtcNow;
                     }
 
-                    user.UpdatedAt = DateTime.UtcNow;
+                    // Handle first-time discount
+                    if (order.PromoCode == "firstUse" && user.FirstTimeOrder)
+                    {
+                        user.FirstTimeOrder = false;
+                        user.UpdatedAt = DateTime.UtcNow;
+                    }
+
+                    // Auto-save apartment if conditions are met
+                    if (order.ApartmentId == null && // Not using an existing apartment
+                        !string.IsNullOrEmpty(order.ServiceAddress) &&
+                        !string.IsNullOrEmpty(order.City) &&
+                        !string.IsNullOrEmpty(order.State) &&
+                        !string.IsNullOrEmpty(order.ZipCode))
+                    {
+                        // Check if user has less than 10 apartments
+                        if (user.Apartments.Count < 10)
+                        {
+                            // CHECK ONLY ZIP CODE for existing apartment
+                            var existingApartmentWithSameZip = user.Apartments.FirstOrDefault(a =>
+                                a.PostalCode == order.ZipCode);
+
+                            if (existingApartmentWithSameZip == null)
+                            {
+                                // No apartment with this zip code exists - create new one
+                                var apartmentName = order.ApartmentName;
+                                if (string.IsNullOrEmpty(apartmentName))
+                                {
+                                    var apartmentCount = user.Apartments.Count + 1;
+                                    apartmentName = $"Address {apartmentCount}";
+                                }
+
+                                // Create new apartment
+                                var newApartment = new Apartment
+                                {
+                                    UserId = userId,
+                                    Name = apartmentName,
+                                    Address = order.ServiceAddress,
+                                    AptSuite = order.AptSuite,
+                                    City = order.City,
+                                    State = order.State,
+                                    PostalCode = order.ZipCode,
+                                    SpecialInstructions = order.SpecialInstructions,
+                                    CreatedAt = DateTime.UtcNow,
+                                    IsActive = true
+                                };
+
+                                _context.Apartments.Add(newApartment);
+                                await _context.SaveChangesAsync();
+
+                                // Update the order to link to the new apartment
+                                order.ApartmentId = newApartment.Id;
+
+                                Console.WriteLine($"Auto-created apartment '{apartmentName}' with zip code {order.ZipCode} for user {userId}");
+                            }
+                            else
+                            {
+                                // Apartment with same zip code already exists - link to it
+                                order.ApartmentId = existingApartmentWithSameZip.Id;
+                                Console.WriteLine($"Found existing apartment with zip code {order.ZipCode}, linked order to apartment ID {existingApartmentWithSameZip.Id}");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"User {userId} has reached the maximum of 10 apartments");
+                        }
+                    }
                 }
 
                 // Simulate payment completion
@@ -666,12 +732,12 @@ namespace DreamCleaningBackend.Controllers
                     success = true,
                     message = "Payment completed successfully",
                     orderId = order.Id,
-                    status = order.Status,
-                    phoneUpdated = user != null && !string.IsNullOrEmpty(order.ContactPhone) && string.IsNullOrEmpty(user.Phone)
+                    status = order.Status
                 });
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Error in SimulatePayment: {ex.Message}");
                 return BadRequest(new { message = "Failed to process payment: " + ex.Message });
             }
         }

@@ -55,7 +55,7 @@ namespace DreamCleaningBackend.DTOs
         public string ZipCode { get; set; }
 
         public int? ApartmentId { get; set; }
-
+        public string? ApartmentName { get; set; }
         public string? PromoCode { get; set; }
 
         [Range(0, double.MaxValue)]

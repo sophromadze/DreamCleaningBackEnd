@@ -15,6 +15,11 @@ namespace DreamCleaningBackend.Models
         public int? ApartmentId { get; set; }
         public virtual Apartment? Apartment { get; set; }
 
+        // Add this temporary field to store apartment name from booking
+        // This is used when auto-creating apartments after payment
+        [StringLength(100)]
+        public string? ApartmentName { get; set; }
+
         // Service Type
         public int ServiceTypeId { get; set; }
         public virtual ServiceType ServiceType { get; set; }

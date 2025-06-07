@@ -54,9 +54,14 @@ namespace DreamCleaningBackend.Services
 
         public async Task<ApartmentDto> AddApartment(int userId, CreateApartmentDto createApartmentDto)
         {
-            var user = await _userRepository.GetByIdAsync(userId);
+            // Get user with apartments to check count
+            var user = await _userRepository.GetByIdWithDetailsAsync(userId);
             if (user == null)
                 throw new Exception("User not found");
+
+            // Check if user has reached the maximum number of apartments
+            if (user.Apartments.Count >= 5)
+                throw new Exception("You have reached the maximum limit of 5 apartments");
 
             var apartment = new Apartment
             {
