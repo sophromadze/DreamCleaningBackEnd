@@ -13,17 +13,16 @@ namespace DreamCleaningBackend.Models
         // Extra Service relationship
         public int ExtraServiceId { get; set; }
         public virtual ExtraService ExtraService { get; set; }
-        public string ExtraServiceName { get; set; }
 
         // Quantity (for services with quantity)
         public int Quantity { get; set; } = 1;
 
         // Hours (for services with hours, stored in 30-minute increments)
-        public int Hours { get; set; } = 0;
+        public decimal Hours { get; set; } = 0;
 
         // Calculated cost
         [Column(TypeName = "decimal(18,2)")]
-        public int Cost { get; set; }
+        public decimal Cost { get; set; }
 
         // Duration in minutes
         public int Duration { get; set; }

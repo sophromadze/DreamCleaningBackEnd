@@ -225,45 +225,22 @@ namespace DreamCleaningBackend.Controllers
                 if (frequency == null)
                     return BadRequest(new { message = "Invalid frequency" });
 
-                // Calculate pricing
-                decimal subTotal = serviceType.BasePrice;
-                int totalDuration = 0;
-                decimal priceMultiplier = 1;
-                decimal deepCleaningFee = 0;
-
-                // Check for deep cleaning multipliers
-                foreach (var extraServiceDto in dto.ExtraServices)
+                // Ensure the service date is properly set with UTC kind
+                var serviceDate = dto.ServiceDate.Date;
+                if (serviceDate.Kind == DateTimeKind.Unspecified)
                 {
-                    var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
-                    if (extraService != null)
-                    {
-                        if (extraService.IsSuperDeepCleaning)
-                        {
-                            priceMultiplier = extraService.PriceMultiplier;
-                            deepCleaningFee = extraService.Price;
-                            break; // Super deep cleaning takes precedence
-                        }
-                        else if (extraService.IsDeepCleaning && priceMultiplier == 1)
-                        {
-                            priceMultiplier = extraService.PriceMultiplier;
-                            deepCleaningFee = extraService.Price;
-                        }
-                    }
+                    serviceDate = DateTime.SpecifyKind(serviceDate, DateTimeKind.Utc);
                 }
 
-                // Apply multiplier to base price
-                subTotal *= priceMultiplier;
-
-                // Create order - assuming your Order entity expects string for ServiceTime
+                // Create the order
                 var order = new Order
                 {
                     UserId = userId,
                     ServiceTypeId = dto.ServiceTypeId,
-                    OrderDate = DateTime.UtcNow,
-                    ServiceDate = dto.ServiceDate,
-                    ServiceTime = dto.ServiceTime, // Keep as string since Order expects string
-                    Status = "Pending",
                     FrequencyId = dto.FrequencyId,
+                    OrderDate = DateTime.UtcNow,
+                    ServiceDate = serviceDate,
+                    ServiceTime = TimeSpan.Parse(dto.ServiceTime),
                     EntryMethod = dto.EntryMethod,
                     SpecialInstructions = dto.SpecialInstructions,
                     ContactFirstName = dto.ContactFirstName,
@@ -275,14 +252,48 @@ namespace DreamCleaningBackend.Controllers
                     City = dto.City,
                     State = dto.State,
                     ZipCode = dto.ZipCode,
+                    ApartmentId = dto.ApartmentId,
                     PromoCode = dto.PromoCode,
                     Tips = dto.Tips,
-                    IsPaid = false,
-                    OrderServices = new List<OrderService>(),
-                    OrderExtraServices = new List<OrderExtraService>()
+                    Status = "Pending",
+                    CreatedAt = DateTime.UtcNow
                 };
 
-                // Calculate services cost and duration
+                // Calculate pricing
+                decimal subTotal = 0;
+                int totalDuration = 0;
+                decimal deepCleaningFee = 0;
+
+                // Check for deep cleaning multipliers first
+                decimal priceMultiplier = 1.0m;
+                bool hasDeepCleaning = false;
+                bool hasSuperDeepCleaning = false;
+
+                foreach (var extraServiceDto in dto.ExtraServices)
+                {
+                    var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
+                    if (extraService != null)
+                    {
+                        if (extraService.IsSuperDeepCleaning)
+                        {
+                            hasSuperDeepCleaning = true;
+                            priceMultiplier = extraService.PriceMultiplier;
+                            deepCleaningFee = extraService.Price;
+                            break; // Super deep cleaning takes precedence
+                        }
+                        else if (extraService.IsDeepCleaning)
+                        {
+                            hasDeepCleaning = true;
+                            priceMultiplier = extraService.PriceMultiplier;
+                            deepCleaningFee = extraService.Price;
+                        }
+                    }
+                }
+
+                // Apply multiplier to base price
+                subTotal = serviceType.BasePrice * priceMultiplier;
+
+                // Add services
                 foreach (var serviceDto in dto.Services)
                 {
                     var service = await _context.Services.FindAsync(serviceDto.ServiceId);
@@ -292,7 +303,7 @@ namespace DreamCleaningBackend.Controllers
                         int serviceDuration = 0;
                         bool shouldAddToOrder = true;
 
-                        // Special handling for cleaner-hours relationship
+                        // Special handling for cleaner-hours relationship - works for ANY service type
                         if (service.ServiceRelationType == "cleaner")
                         {
                             // Find the hours service in the same order
@@ -312,7 +323,29 @@ namespace DreamCleaningBackend.Controllers
                             }
                             else
                             {
-                                // If no hours service found, calculate based on cleaner count only
+                                // If no hours service found, might want to handle this case
+                                // For now, we'll calculate based on cleaner count only
+                                serviceCost = service.Cost * serviceDto.Quantity * priceMultiplier;
+                                serviceDuration = service.TimeDuration * serviceDto.Quantity;
+                            }
+                        }
+                        else if (service.ServiceRelationType == "hours")
+                        {
+                            // Hours service - don't add separately when used with cleaners
+                            // Check if there's a cleaner service in the same order
+                            var hasCleanerService = dto.Services.Any(s =>
+                            {
+                                var svc = _context.Services.Find(s.ServiceId);
+                                return svc?.ServiceRelationType == "cleaner" && svc.ServiceTypeId == service.ServiceTypeId;
+                            });
+
+                            if (hasCleanerService)
+                            {
+                                shouldAddToOrder = false; // Skip adding hours separately
+                            }
+                            else
+                            {
+                                // If hours is used alone (without cleaners), treat it as regular service
                                 serviceCost = service.Cost * serviceDto.Quantity * priceMultiplier;
                                 serviceDuration = service.TimeDuration * serviceDto.Quantity;
                             }
@@ -323,173 +356,108 @@ namespace DreamCleaningBackend.Controllers
                             serviceCost = 20 * priceMultiplier;
                             serviceDuration = 20; // 20 minutes for studio
                         }
-                        else if (service.ServiceRelationType != "hours")
+                        else
                         {
                             // Regular service calculation
                             serviceCost = service.Cost * serviceDto.Quantity * priceMultiplier;
                             serviceDuration = service.TimeDuration * serviceDto.Quantity;
                         }
-                        else
-                        {
-                            // Skip hours service as it's already processed with cleaners
-                            shouldAddToOrder = service.ServiceRelationType != "hours" ||
-                                             !dto.Services.Any(s =>
-                                             {
-                                                 var svc = _context.Services.Find(s.ServiceId);
-                                                 return svc?.ServiceRelationType == "cleaner" && svc.ServiceTypeId == service.ServiceTypeId;
-                                             });
 
-                            if (shouldAddToOrder)
-                            {
-                                serviceCost = service.Cost * serviceDto.Quantity * priceMultiplier;
-                                serviceDuration = service.TimeDuration * serviceDto.Quantity;
-                            }
-                        }
-
+                        // Add to order if it should be added
                         if (shouldAddToOrder)
                         {
+                            var orderService = new OrderService
+                            {
+                                ServiceId = serviceDto.ServiceId,
+                                Quantity = serviceDto.Quantity,
+                                Cost = serviceCost,
+                                Duration = serviceDuration,
+                                PriceMultiplier = priceMultiplier,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            order.OrderServices.Add(orderService);
                             subTotal += serviceCost;
                             totalDuration += serviceDuration;
-
-                            // Add to order services
-                            order.OrderServices.Add(new OrderService
-                            {
-                                ServiceId = service.Id,
-                                Quantity = serviceDto.Quantity,
-                                Cost = (int)Math.Round(serviceCost), // Convert decimal to int
-                                Duration = serviceDuration,
-                                PriceMultiplier = priceMultiplier
-                            });
                         }
                     }
                 }
 
-                // Calculate extra services cost and duration
+                // Add extra services
                 foreach (var extraServiceDto in dto.ExtraServices)
                 {
                     var extraService = await _context.ExtraServices.FindAsync(extraServiceDto.ExtraServiceId);
                     if (extraService != null)
                     {
-                        decimal extraCost = 0;
-                        int extraDuration = 0;
+                        decimal cost = 0;
 
-                        if (!extraService.IsDeepCleaning && !extraService.IsSuperDeepCleaning)
+                        // For deep cleaning services, store their actual price
+                        if (extraService.IsDeepCleaning || extraService.IsSuperDeepCleaning)
                         {
-                            var currentMultiplier = extraService.IsSameDayService ? 1 : priceMultiplier;
-
-                            if (extraService.HasHours)
-                            {
-                                extraCost = extraService.Price * extraServiceDto.Hours * currentMultiplier;
-                                extraDuration = (int)(extraService.Duration * extraServiceDto.Hours);
-                            }
-                            else if (extraService.HasQuantity)
-                            {
-                                extraCost = extraService.Price * extraServiceDto.Quantity * currentMultiplier;
-                                extraDuration = extraService.Duration * extraServiceDto.Quantity;
-                            }
-                            else
-                            {
-                                extraCost = extraService.Price * currentMultiplier;
-                                extraDuration = extraService.Duration;
-                            }
-
-                            subTotal += extraCost;
+                            cost = extraService.Price; // Store the actual deep cleaning fee
                         }
                         else
                         {
-                            // Deep cleaning services - only duration
-                            extraDuration = extraService.Duration;
+                            // Regular extra services - apply multiplier EXCEPT for Same Day Service
+                            var currentMultiplier = extraService.IsSameDayService ? 1.0m : priceMultiplier;
+
+                            if (extraService.HasHours && extraServiceDto.Hours > 0)
+                            {
+                                cost = extraService.Price * extraServiceDto.Hours * currentMultiplier;
+                            }
+                            else if (extraService.HasQuantity && extraServiceDto.Quantity > 0)
+                            {
+                                cost = extraService.Price * extraServiceDto.Quantity * currentMultiplier;
+                            }
+                            else if (!extraService.HasHours && !extraService.HasQuantity)
+                            {
+                                cost = extraService.Price * currentMultiplier;
+                            }
                         }
 
-                        totalDuration += extraDuration;
-
-                        // Add to order extra services
-                        order.OrderExtraServices.Add(new OrderExtraService
+                        var orderExtraService = new OrderExtraService
                         {
-                            ExtraServiceId = extraService.Id,
+                            ExtraServiceId = extraServiceDto.ExtraServiceId,
                             Quantity = extraServiceDto.Quantity,
-                            Hours = (int)Math.Round(extraServiceDto.Hours), // Convert decimal to int
-                            Cost = (int)Math.Round(extraCost), // Convert decimal to int
-                            Duration = extraDuration
-                        });
+                            Hours = extraServiceDto.Hours,
+                            Cost = cost, // Now this will have the actual price for deep cleaning
+                            Duration = extraService.Duration,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        order.OrderExtraServices.Add(orderExtraService);
+
+                        // Only add non-deep-cleaning costs to subtotal (deep cleaning fee is added separately)
+                        if (!extraService.IsDeepCleaning && !extraService.IsSuperDeepCleaning)
+                        {
+                            subTotal += cost;
+                        }
+                        totalDuration += orderExtraService.Duration;
                     }
                 }
 
-                // Calculate maids count
-                int maidsCount = 1;
-                int displayDuration = totalDuration;
-
-                // Check if cleaners are explicitly selected
-                var cleanerService = dto.Services.FirstOrDefault(s =>
-                {
-                    var service = _context.Services.Find(s.ServiceId);
-                    return service?.ServiceRelationType == "cleaner";
-                });
-
-                if (cleanerService != null)
-                {
-                    // Use the selected cleaner count
-                    maidsCount = cleanerService.Quantity;
-
-                    // Check if hours service is also selected
-                    var hoursService = dto.Services.FirstOrDefault(s =>
-                    {
-                        var service = _context.Services.Find(s.ServiceId);
-                        return service?.ServiceRelationType == "hours";
-                    });
-
-                    if (hoursService != null)
-                    {
-                        // When both cleaners and hours are selected, use hours for duration
-                        displayDuration = hoursService.Quantity * 60;
-                    }
-                }
-                else
-                {
-                    // Calculate based on duration (every 6 hours = 1 maid)
-                    var totalHours = totalDuration / 60.0;
-                    if (totalHours > 6)
-                    {
-                        maidsCount = (int)Math.Ceiling(totalHours / 6);
-                        displayDuration = (int)Math.Ceiling((double)totalDuration / maidsCount);
-                    }
-                }
-
-                // Add deep cleaning fee after all calculations
+                // Add deep cleaning fee AFTER all calculations
                 subTotal += deepCleaningFee;
 
                 // Apply frequency discount
-                var discountAmount = 0m;
                 if (frequency.DiscountPercentage > 0)
                 {
-                    discountAmount = (subTotal - deepCleaningFee) * (frequency.DiscountPercentage / 100);
+                    order.DiscountAmount = subTotal * (frequency.DiscountPercentage / 100);
                 }
 
-                // Apply promo code if provided
-                if (!string.IsNullOrEmpty(dto.PromoCode))
+                // Apply first-time discount
+                var user = await _context.Users.FindAsync(userId);
+                if (user != null && user.FirstTimeOrder)
                 {
-                    var promoCode = await _context.PromoCodes.FirstOrDefaultAsync(pc =>
-                        pc.Code == dto.PromoCode && pc.IsActive);
-
-                    if (promoCode != null)
-                    {
-                        if (promoCode.IsPercentage)
-                        {
-                            discountAmount += (subTotal - deepCleaningFee) * (promoCode.DiscountValue / 100);
-                        }
-                        else
-                        {
-                            discountAmount += promoCode.DiscountValue;
-                        }
-                    }
+                    order.DiscountAmount += subTotal * 0.20m; // 20% first-time discount
+                    user.FirstTimeOrder = false; // Mark as used
                 }
 
-                // Final calculations
+                // Calculate totals
                 order.SubTotal = subTotal;
-                order.DiscountAmount = discountAmount;
-                order.Tax = (subTotal - discountAmount) * 0.088m; // 8.8% tax
+                order.Tax = (subTotal - order.DiscountAmount) * 0.088m; // 8.8% tax
                 order.Total = order.SubTotal - order.DiscountAmount + order.Tax + order.Tips;
-                order.TotalDuration = displayDuration;
+                order.TotalDuration = totalDuration;
+
+
 
                 // Add order to database
                 _context.Orders.Add(order);

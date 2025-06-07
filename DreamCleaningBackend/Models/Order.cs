@@ -18,7 +18,6 @@ namespace DreamCleaningBackend.Models
         // Service Type
         public int ServiceTypeId { get; set; }
         public virtual ServiceType ServiceType { get; set; }
-        public string ServiceTypeName { get; set; } 
 
         // Order details
         [Required]
@@ -27,7 +26,7 @@ namespace DreamCleaningBackend.Models
         [Required]
         public DateTime ServiceDate { get; set; }
 
-        public string ServiceTime { get; set; }
+        public TimeSpan ServiceTime { get; set; }
 
         // Duration in minutes
         public int TotalDuration { get; set; }
@@ -58,7 +57,6 @@ namespace DreamCleaningBackend.Models
         // Frequency/Subscription
         public int FrequencyId { get; set; }
         public virtual Frequency Frequency { get; set; }
-        public string FrequencyName { get; set; }
 
         // Entry method
         [StringLength(100)]

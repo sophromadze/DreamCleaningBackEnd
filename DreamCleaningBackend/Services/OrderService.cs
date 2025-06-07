@@ -25,12 +25,13 @@ namespace DreamCleaningBackend.Services
         public async Task<List<OrderListDto>> GetUserOrders(int userId)
         {
             var orders = await _orderRepository.GetUserOrdersAsync(userId);
+
             return orders.Select(o => new OrderListDto
             {
                 Id = o.Id,
                 ServiceTypeName = o.ServiceType?.Name ?? "",
                 ServiceDate = o.ServiceDate,
-                ServiceTime = TimeSpan.Parse(o.ServiceTime), // Fixed: changed 'order' to 'o' and parse string to TimeSpan
+                ServiceTime = o.ServiceTime,
                 Status = o.Status,
                 Total = o.Total,
                 ServiceAddress = o.ServiceAddress + (string.IsNullOrEmpty(o.AptSuite) ? "" : ", " + o.AptSuite),
@@ -38,73 +39,14 @@ namespace DreamCleaningBackend.Services
             }).ToList();
         }
 
-
         public async Task<OrderDto> GetOrderById(int orderId, int userId)
         {
-            var order = await _context.Orders
-                .Include(o => o.OrderServices)
-                .Include(o => o.OrderExtraServices)
-                .FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
+            var order = await _orderRepository.GetByIdWithDetailsAsync(orderId);
 
-            if (order == null)
+            if (order == null || order.UserId != userId)
                 throw new Exception("Order not found");
 
-            var orderDto = new OrderDto
-            {
-                Id = order.Id,
-                UserId = order.UserId,
-                ServiceTypeId = order.ServiceTypeId,
-                ServiceTypeName = order.ServiceTypeName ?? "",
-                OrderDate = order.OrderDate,
-                ServiceDate = order.ServiceDate,
-                ServiceTime = TimeSpan.Parse(order.ServiceTime), // Parse string to TimeSpan
-                Status = order.Status,
-                SubTotal = order.SubTotal,
-                Tax = order.Tax,
-                Tips = order.Tips,
-                Total = order.Total,
-                DiscountAmount = order.DiscountAmount,
-                PromoCode = order.PromoCode,
-                FrequencyId = order.FrequencyId,
-                FrequencyName = order.FrequencyName ?? "",
-                EntryMethod = order.EntryMethod,
-                SpecialInstructions = order.SpecialInstructions,
-                ContactFirstName = order.ContactFirstName,
-                ContactLastName = order.ContactLastName,
-                ContactEmail = order.ContactEmail,
-                ContactPhone = order.ContactPhone,
-                ServiceAddress = order.ServiceAddress,
-                AptSuite = order.AptSuite,
-                City = order.City,
-                State = order.State,
-                ZipCode = order.ZipCode,
-                TotalDuration = order.TotalDuration,
-                MaidsCount = order.MaidsCount == 0 ? 1 : order.MaidsCount, // Fixed
-                IsPaid = order.IsPaid,
-                PaidAt = order.PaidAt,
-                Services = order.OrderServices.Select(s => new OrderServiceDto
-                {
-                    Id = s.Id,
-                    ServiceId = s.ServiceId,
-                    ServiceName = s.ServiceName ?? "",
-                    Quantity = s.Quantity,
-                    Cost = s.Cost, // Cost should be decimal in both
-                    Duration = s.Duration,
-                    PriceMultiplier = s.PriceMultiplier
-                }).ToList(),
-                ExtraServices = order.OrderExtraServices.Select(es => new OrderExtraServiceDto
-                {
-                    Id = es.Id,
-                    ExtraServiceId = es.ExtraServiceId,
-                    ExtraServiceName = es.ExtraServiceName ?? "",
-                    Quantity = es.Quantity,
-                    Hours = es.Hours, // Hours should be decimal in both
-                    Cost = es.Cost, // Cost should be decimal in both
-                    Duration = es.Duration
-                }).ToList()
-            };
-
-            return orderDto;
+            return MapOrderToDto(order);
         }
 
         public async Task<OrderDto> UpdateOrder(int orderId, int userId, UpdateOrderDto updateOrderDto)
@@ -141,7 +83,7 @@ namespace DreamCleaningBackend.Services
 
             // Update basic order information
             order.ServiceDate = updateOrderDto.ServiceDate;
-            order.ServiceTime = updateOrderDto.ServiceTime;
+            order.ServiceTime = TimeSpan.Parse(updateOrderDto.ServiceTime);
             order.EntryMethod = updateOrderDto.EntryMethod;
             order.SpecialInstructions = updateOrderDto.SpecialInstructions;
             order.ContactFirstName = updateOrderDto.ContactFirstName;
@@ -278,7 +220,7 @@ namespace DreamCleaningBackend.Services
                             Order = order,
                             ServiceId = serviceDto.ServiceId,
                             Quantity = serviceDto.Quantity,
-                            Cost = (int)Math.Round(serviceCost), // Convert decimal to int
+                            Cost = serviceCost,
                             Duration = serviceDuration,
                             PriceMultiplier = priceMultiplier,
                             CreatedAt = DateTime.UtcNow
@@ -329,8 +271,8 @@ namespace DreamCleaningBackend.Services
                         Order = order,
                         ExtraServiceId = extraServiceDto.ExtraServiceId,
                         Quantity = extraServiceDto.Quantity,
-                        Hours = (int)Math.Round(extraServiceDto.Hours), // Convert decimal to int
-                        Cost = (int)Math.Round(cost), // Convert decimal to int
+                        Hours = extraServiceDto.Hours,
+                        Cost = cost,
                         Duration = extraService.Duration,
                         CreatedAt = DateTime.UtcNow
                     };
@@ -701,7 +643,7 @@ namespace DreamCleaningBackend.Services
             return true;
         }
 
-        private static OrderDto MapOrderToDto(Order order)
+        private OrderDto MapOrderToDto(Order order)
         {
             return new OrderDto
             {
@@ -711,7 +653,7 @@ namespace DreamCleaningBackend.Services
                 ServiceTypeName = order.ServiceType?.Name ?? "",
                 OrderDate = order.OrderDate,
                 ServiceDate = order.ServiceDate,
-                ServiceTime = TimeSpan.Parse(order.ServiceTime), // Parse string to TimeSpan
+                ServiceTime = order.ServiceTime,
                 Status = order.Status,
                 SubTotal = order.SubTotal,
                 Tax = order.Tax,

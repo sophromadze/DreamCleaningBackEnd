@@ -13,14 +13,13 @@ namespace DreamCleaningBackend.Models
         // Service relationship
         public int ServiceId { get; set; }
         public virtual Service Service { get; set; }
-        public string ServiceName { get; set; }
 
         // Quantity/Value for this service in this order
         public int Quantity { get; set; } // e.g., 3 bedrooms, 2 bathrooms, 1500 sqft
 
         // Calculated cost for this service
         [Column(TypeName = "decimal(18,2)")]
-        public int Cost { get; set; }
+        public decimal Cost { get; set; }
 
         // Duration in minutes for this service
         public int Duration { get; set; }
