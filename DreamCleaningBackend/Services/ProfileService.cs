@@ -54,14 +54,33 @@ namespace DreamCleaningBackend.Services
 
         public async Task<ApartmentDto> AddApartment(int userId, CreateApartmentDto createApartmentDto)
         {
-            // Get user with apartments to check count
+            // Get user with apartments to check count and duplicates
             var user = await _userRepository.GetByIdWithDetailsAsync(userId);
             if (user == null)
                 throw new Exception("User not found");
 
-            // Check if user has reached the maximum number of apartments
-            if (user.Apartments.Count >= 5)
-                throw new Exception("You have reached the maximum limit of 5 apartments");
+            // Check if user has reached the maximum number of apartments (you mentioned 10 in the code)
+            if (user.Apartments.Count >= 10)
+                throw new Exception("You have reached the maximum limit of 10 apartments");
+
+            // Check for duplicate apartment by name OR address (case-insensitive) among active apartments
+            var duplicateApartment = user.Apartments.FirstOrDefault(a =>
+                a.IsActive && (
+                    a.Name.ToLower() == createApartmentDto.Name.ToLower() || // Same name
+                    a.Address.ToLower() == createApartmentDto.Address.ToLower() // Same address (just the street address)
+                ));
+
+            if (duplicateApartment != null)
+            {
+                if (duplicateApartment.Name.ToLower() == createApartmentDto.Name.ToLower())
+                {
+                    throw new Exception($"An apartment with the name '{createApartmentDto.Name}' already exists");
+                }
+                else
+                {
+                    throw new Exception($"An apartment with the address '{createApartmentDto.Address}' already exists");
+                }
+            }
 
             var apartment = new Apartment
             {
@@ -83,6 +102,7 @@ namespace DreamCleaningBackend.Services
             return MapApartmentToDto(apartment);
         }
 
+
         public async Task<ApartmentDto> UpdateApartment(int userId, int apartmentId, ApartmentDto apartmentDto)
         {
             // Verify apartment belongs to user
@@ -92,6 +112,32 @@ namespace DreamCleaningBackend.Services
             var apartment = await _apartmentRepository.GetByIdAsync(apartmentId);
             if (apartment == null)
                 throw new Exception("Apartment not found");
+
+            // Get all user apartments to check for duplicates
+            var user = await _userRepository.GetByIdWithDetailsAsync(userId);
+            if (user == null)
+                throw new Exception("User not found");
+
+            // Check for duplicate apartment (excluding the current one being edited)
+            var duplicateApartment = user.Apartments.FirstOrDefault(a =>
+                a.IsActive &&
+                a.Id != apartmentId && // Exclude current apartment
+                (
+                    a.Name.ToLower() == apartmentDto.Name.ToLower() || // Same name
+                    a.Address.ToLower() == apartmentDto.Address.ToLower() // Same address (just the street address)
+                ));
+
+            if (duplicateApartment != null)
+            {
+                if (duplicateApartment.Name.ToLower() == apartmentDto.Name.ToLower())
+                {
+                    throw new Exception($"An apartment with the name '{apartmentDto.Name}' already exists");
+                }
+                else
+                {
+                    throw new Exception($"An apartment with the address '{apartmentDto.Address}' already exists");
+                }
+            }
 
             apartment.Name = apartmentDto.Name;
             apartment.Address = apartmentDto.Address;

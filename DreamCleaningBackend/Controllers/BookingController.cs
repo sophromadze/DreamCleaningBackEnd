@@ -616,7 +616,6 @@ namespace DreamCleaningBackend.Controllers
         }
 
         // Add this method to BookingController.cs after the CreateBooking method:
-
         [HttpPost("simulate-payment/{orderId}")]
         [Authorize]
         public async Task<ActionResult> SimulatePayment(int orderId)
@@ -658,8 +657,12 @@ namespace DreamCleaningBackend.Controllers
                         user.UpdatedAt = DateTime.UtcNow;
                     }
 
-                    // Auto-save apartment if conditions are met
+                    // FIXED: Only auto-save apartment if conditions are met
+                    // 1. Order doesn't already have an apartment (not using saved address)
+                    // 2. User provided an apartment name (intentional save)
+                    // 3. All address fields are filled
                     if (order.ApartmentId == null && // Not using an existing apartment
+                        !string.IsNullOrEmpty(order.ApartmentName) && // User provided apartment name
                         !string.IsNullOrEmpty(order.ServiceAddress) &&
                         !string.IsNullOrEmpty(order.City) &&
                         !string.IsNullOrEmpty(order.State) &&
@@ -668,25 +671,49 @@ namespace DreamCleaningBackend.Controllers
                         // Check if user has less than 10 apartments
                         if (user.Apartments.Count < 10)
                         {
-                            // CHECK ONLY ZIP CODE for existing apartment
-                            var existingApartmentWithSameZip = user.Apartments.FirstOrDefault(a =>
-                                a.PostalCode == order.ZipCode);
+                            // Check if apartment with the same name OR same address already exists (case-insensitive)
+                            var existingApartment = user.Apartments.FirstOrDefault(a =>
+                                a.IsActive && (
+                                    a.Name.ToLower() == order.ApartmentName.ToLower() || // Same name (case-insensitive)
+                                    (a.Address.ToLower() == order.ServiceAddress.ToLower() && // Same full address (case-insensitive)
+                                     a.City.ToLower() == order.City.ToLower() &&
+                                     a.State.ToLower() == order.State.ToLower() &&
+                                     a.PostalCode.ToLower() == order.ZipCode.ToLower())
+                                ));
 
-                            if (existingApartmentWithSameZip == null)
+                            if (existingApartment != null)
                             {
-                                // No apartment with this zip code exists - create new one
-                                var apartmentName = order.ApartmentName;
-                                if (string.IsNullOrEmpty(apartmentName))
+                                // Found existing apartment with same name or address - link to it and UPDATE ALL FIELDS
+                                order.ApartmentId = existingApartment.Id;
+
+                                if (existingApartment.Name.ToLower() == order.ApartmentName.ToLower())
                                 {
-                                    var apartmentCount = user.Apartments.Count + 1;
-                                    apartmentName = $"Address {apartmentCount}";
+                                    Console.WriteLine($"Found existing apartment with name '{existingApartment.Name}' (matched '{order.ApartmentName}'), updating all fields");
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Found existing apartment with same address at {existingApartment.Address}, updating all fields");
                                 }
 
-                                // Create new apartment
+                                // ALWAYS update all fields when we find a match
+                                existingApartment.Name = order.ApartmentName;
+                                existingApartment.Address = order.ServiceAddress;
+                                existingApartment.AptSuite = order.AptSuite;
+                                existingApartment.City = order.City;
+                                existingApartment.State = order.State;
+                                existingApartment.PostalCode = order.ZipCode;
+                                existingApartment.SpecialInstructions = order.SpecialInstructions;
+                                existingApartment.UpdatedAt = DateTime.UtcNow;
+
+                                Console.WriteLine($"Updated apartment ID {existingApartment.Id} with all new details");
+                            }
+                            else
+                            {
+                                // No apartment with this name or address exists - create new one
                                 var newApartment = new Apartment
                                 {
                                     UserId = userId,
-                                    Name = apartmentName,
+                                    Name = order.ApartmentName,
                                     Address = order.ServiceAddress,
                                     AptSuite = order.AptSuite,
                                     City = order.City,
@@ -703,13 +730,7 @@ namespace DreamCleaningBackend.Controllers
                                 // Update the order to link to the new apartment
                                 order.ApartmentId = newApartment.Id;
 
-                                Console.WriteLine($"Auto-created apartment '{apartmentName}' with zip code {order.ZipCode} for user {userId}");
-                            }
-                            else
-                            {
-                                // Apartment with same zip code already exists - link to it
-                                order.ApartmentId = existingApartmentWithSameZip.Id;
-                                Console.WriteLine($"Found existing apartment with zip code {order.ZipCode}, linked order to apartment ID {existingApartmentWithSameZip.Id}");
+                                Console.WriteLine($"Created new apartment '{order.ApartmentName}' at {order.ServiceAddress} for user {userId}");
                             }
                         }
                         else
@@ -717,6 +738,7 @@ namespace DreamCleaningBackend.Controllers
                             Console.WriteLine($"User {userId} has reached the maximum of 10 apartments");
                         }
                     }
+                    // If no apartment name provided or apartment already exists, order remains without apartmentId
                 }
 
                 // Simulate payment completion
