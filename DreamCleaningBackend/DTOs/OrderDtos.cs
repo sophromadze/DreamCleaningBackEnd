@@ -18,6 +18,7 @@ namespace DreamCleaningBackend.DTOs
         public decimal Tips { get; set; }
         public decimal Total { get; set; }
         public decimal DiscountAmount { get; set; }
+        public decimal SubscriptionDiscountAmount { get; set; }
         public string? PromoCode { get; set; }
         public int FrequencyId { get; set; }
         public string FrequencyName { get; set; }

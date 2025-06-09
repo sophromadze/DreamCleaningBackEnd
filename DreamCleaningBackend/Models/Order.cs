@@ -55,6 +55,7 @@ namespace DreamCleaningBackend.Models
         // Discount applied (if any)
         [Column(TypeName = "decimal(18,2)")]
         public decimal DiscountAmount { get; set; }
+        public decimal SubscriptionDiscountAmount { get; set; } = 0;
 
         [StringLength(50)]
         public string? PromoCode { get; set; }

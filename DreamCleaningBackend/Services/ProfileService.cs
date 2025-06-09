@@ -186,6 +186,9 @@ namespace DreamCleaningBackend.Services
                 FirstTimeOrder = user.FirstTimeOrder,
                 SubscriptionId = user.SubscriptionId,
                 SubscriptionName = user.Subscription?.Name,
+                SubscriptionDiscountPercentage = user.Subscription?.DiscountPercentage,
+                SubscriptionExpiryDate = user.SubscriptionExpiryDate,
+                SubscriptionOrderCount = user.SubscriptionOrderCount,
                 Apartments = user.Apartments.Select(MapApartmentToDto).ToList()
             };
         }

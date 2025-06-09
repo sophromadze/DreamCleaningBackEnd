@@ -42,6 +42,7 @@ builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 
 // CORS Configuration
 builder.Services.AddCors(options =>
