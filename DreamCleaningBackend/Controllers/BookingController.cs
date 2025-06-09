@@ -671,66 +671,74 @@ namespace DreamCleaningBackend.Controllers
                         // Check if user has less than 10 apartments
                         if (user.Apartments.Count < 10)
                         {
-                            // Check if apartment with the same name OR same address already exists (case-insensitive)
-                            var existingApartment = user.Apartments.FirstOrDefault(a =>
-                                a.IsActive && (
-                                    a.Name.ToLower() == order.ApartmentName.ToLower() || // Same name (case-insensitive)
-                                    (a.Address.ToLower() == order.ServiceAddress.ToLower() && // Same full address (case-insensitive)
-                                     a.City.ToLower() == order.City.ToLower() &&
-                                     a.State.ToLower() == order.State.ToLower() &&
-                                     a.PostalCode.ToLower() == order.ZipCode.ToLower())
-                                ));
+                            // First, check if apartment with same address exists
+                            var existingApartmentByAddress = user.Apartments.FirstOrDefault(a =>
+                                a.IsActive &&
+                                a.Address.ToLower() == order.ServiceAddress.ToLower() &&
+                                a.City.ToLower() == order.City.ToLower() &&
+                                a.State.ToLower() == order.State.ToLower() &&
+                                a.PostalCode.ToLower() == order.ZipCode.ToLower()
+                            );
 
-                            if (existingApartment != null)
+                            if (existingApartmentByAddress != null)
                             {
-                                // Found existing apartment with same name or address - link to it and UPDATE ALL FIELDS
-                                order.ApartmentId = existingApartment.Id;
+                                // Found existing apartment with same address - link to it but DON'T update
+                                order.ApartmentId = existingApartmentByAddress.Id;
 
-                                if (existingApartment.Name.ToLower() == order.ApartmentName.ToLower())
-                                {
-                                    Console.WriteLine($"Found existing apartment with name '{existingApartment.Name}' (matched '{order.ApartmentName}'), updating all fields");
-                                }
-                                else
-                                {
-                                    Console.WriteLine($"Found existing apartment with same address at {existingApartment.Address}, updating all fields");
-                                }
+                                // IMPORTANT: Use the actual apartment name from the matched apartment
+                                order.ApartmentName = existingApartmentByAddress.Name;
 
-                                // ALWAYS update all fields when we find a match
-                                existingApartment.Name = order.ApartmentName;
-                                existingApartment.Address = order.ServiceAddress;
-                                existingApartment.AptSuite = order.AptSuite;
-                                existingApartment.City = order.City;
-                                existingApartment.State = order.State;
-                                existingApartment.PostalCode = order.ZipCode;
-                                existingApartment.SpecialInstructions = order.SpecialInstructions;
-                                existingApartment.UpdatedAt = DateTime.UtcNow;
-
-                                Console.WriteLine($"Updated apartment ID {existingApartment.Id} with all new details");
+                                Console.WriteLine($"Found existing apartment '{existingApartmentByAddress.Name}' with same address at {existingApartmentByAddress.Address}, linking to it without updating");
                             }
                             else
                             {
-                                // No apartment with this name or address exists - create new one
-                                var newApartment = new Apartment
+                                // No apartment with same address, now check by name
+                                var existingApartmentByName = user.Apartments.FirstOrDefault(a =>
+                                    a.IsActive &&
+                                    a.Name.ToLower() == order.ApartmentName.ToLower()
+                                );
+
+                                if (existingApartmentByName != null)
                                 {
-                                    UserId = userId,
-                                    Name = order.ApartmentName,
-                                    Address = order.ServiceAddress,
-                                    AptSuite = order.AptSuite,
-                                    City = order.City,
-                                    State = order.State,
-                                    PostalCode = order.ZipCode,
-                                    SpecialInstructions = order.SpecialInstructions,
-                                    CreatedAt = DateTime.UtcNow,
-                                    IsActive = true
-                                };
+                                    // Found existing apartment with same name - link and UPDATE
+                                    order.ApartmentId = existingApartmentByName.Id;
 
-                                _context.Apartments.Add(newApartment);
-                                await _context.SaveChangesAsync();
+                                    existingApartmentByName.Name = order.ApartmentName;
+                                    existingApartmentByName.Address = order.ServiceAddress;
+                                    existingApartmentByName.AptSuite = order.AptSuite;
+                                    existingApartmentByName.City = order.City;
+                                    existingApartmentByName.State = order.State;
+                                    existingApartmentByName.PostalCode = order.ZipCode;
+                                    existingApartmentByName.SpecialInstructions = order.SpecialInstructions;
+                                    existingApartmentByName.UpdatedAt = DateTime.UtcNow;
 
-                                // Update the order to link to the new apartment
-                                order.ApartmentId = newApartment.Id;
+                                    Console.WriteLine($"Found existing apartment with name '{existingApartmentByName.Name}', updating all fields");
+                                }
+                                else
+                                {
+                                    // No apartment with this name or address exists - create new one
+                                    var newApartment = new Apartment
+                                    {
+                                        UserId = userId,
+                                        Name = order.ApartmentName,
+                                        Address = order.ServiceAddress,
+                                        AptSuite = order.AptSuite,
+                                        City = order.City,
+                                        State = order.State,
+                                        PostalCode = order.ZipCode,
+                                        SpecialInstructions = order.SpecialInstructions,
+                                        CreatedAt = DateTime.UtcNow,
+                                        IsActive = true
+                                    };
 
-                                Console.WriteLine($"Created new apartment '{order.ApartmentName}' at {order.ServiceAddress} for user {userId}");
+                                    _context.Apartments.Add(newApartment);
+                                    await _context.SaveChangesAsync();
+
+                                    // Update the order to link to the new apartment
+                                    order.ApartmentId = newApartment.Id;
+
+                                    Console.WriteLine($"Created new apartment '{order.ApartmentName}' at {order.ServiceAddress} for user {userId}");
+                                }
                             }
                         }
                         else
