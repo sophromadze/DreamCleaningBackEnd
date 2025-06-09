@@ -566,6 +566,7 @@ namespace DreamCleaningBackend.Services
                 Tips = order.Tips,
                 Total = order.Total,
                 DiscountAmount = order.DiscountAmount,
+                SubscriptionDiscountAmount = order.SubscriptionDiscountAmount,
                 PromoCode = order.PromoCode,
                 FrequencyId = order.FrequencyId,
                 FrequencyName = order.Frequency?.Name ?? "",
