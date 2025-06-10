@@ -209,14 +209,11 @@ namespace DreamCleaningBackend.Controllers
             // Check if there are any orders
             if (serviceType.Orders.Any())
             {
-                return BadRequest("Cannot delete service type with existing orders. Please deactivate instead.");
+                // CHANGED: Return JSON object instead of plain text
+                return BadRequest(new { message = "Cannot delete service type with existing orders. Please deactivate instead." });
             }
 
-            // Delete related services and extra services
-            _context.Services.RemoveRange(serviceType.Services);
-            _context.ExtraServices.RemoveRange(serviceType.ExtraServices);
             _context.ServiceTypes.Remove(serviceType);
-
             await _context.SaveChangesAsync();
 
             return Ok();
@@ -427,7 +424,8 @@ namespace DreamCleaningBackend.Controllers
             // Check if there are any orders using this service
             if (service.OrderServices.Any())
             {
-                return BadRequest("Cannot delete service with existing orders. Please deactivate instead.");
+                // CHANGED: Return JSON object instead of plain text
+                return BadRequest(new { message = "Cannot delete service with existing orders. Please deactivate instead." });
             }
 
             _context.Services.Remove(service);
@@ -643,7 +641,8 @@ namespace DreamCleaningBackend.Controllers
             // Check if there are any orders using this extra service
             if (extraService.OrderExtraServices.Any())
             {
-                return BadRequest("Cannot delete extra service with existing orders. Please deactivate instead.");
+                // CHANGED: Return JSON object instead of plain text
+                return BadRequest(new { message = "Cannot delete extra service with existing orders. Please deactivate instead." });
             }
 
             _context.ExtraServices.Remove(extraService);

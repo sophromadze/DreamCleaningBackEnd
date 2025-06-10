@@ -757,14 +757,21 @@ namespace DreamCleaningBackend.Controllers
                 var subscription = await _context.Subscriptions.FindAsync(order.SubscriptionId);
                 if (subscription != null && subscription.SubscriptionDays > 0)
                 {
+                    var userForSubscription = await _context.Users
+                        .Include(u => u.Subscription)
+                        .FirstOrDefaultAsync(u => u.Id == userId);
                     bool hasActiveSubscription = await _subscriptionService.CheckAndUpdateSubscriptionStatus(userId);
-
                     if (!hasActiveSubscription)
                     {
-                        // Use the subscription we already have - no need to query again
-                        await _subscriptionService.ActivateSubscription(userId, subscription.Id);
+                        // Find corresponding subscription based on subscription days
+                        var userSubscription = await _context.Subscriptions
+                            .FirstOrDefaultAsync(s => s.SubscriptionDays == subscription.SubscriptionDays);
+                        if (userSubscription != null)
+                        {
+                            await _subscriptionService.ActivateSubscription(userId, userSubscription.Id);
+                        }
                     }
-                    else
+                    else if (userForSubscription.SubscriptionId.HasValue)
                     {
                         // Renew existing subscription
                         await _subscriptionService.RenewSubscription(userId);
