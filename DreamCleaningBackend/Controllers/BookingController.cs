@@ -165,7 +165,6 @@ namespace DreamCleaningBackend.Controllers
                 subscriptionName = user.Subscription.Name,
                 discountPercentage = user.Subscription.DiscountPercentage,
                 expiryDate = user.SubscriptionExpiryDate,
-                orderCount = user.SubscriptionOrderCount
             });
         }
 
@@ -853,14 +852,6 @@ namespace DreamCleaningBackend.Controllers
                         // Renew existing subscription
                         await _subscriptionService.RenewSubscription(userId);
                     }
-
-                    //// Apply subscription discount if this is not the first order
-                    //if (hasActiveSubscription && userForSubscription.SubscriptionOrderCount > 0)
-                    //{
-                    //    var subscriptionDiscount = order.SubTotal * (userForSubscription.Subscription.DiscountPercentage / 100);
-                    //    order.DiscountAmount += subscriptionDiscount;
-                    //    order.Total = order.SubTotal - order.DiscountAmount + order.Tax + order.Tips;
-                    //}
                 }
 
                 // Clear first-time discount after payment

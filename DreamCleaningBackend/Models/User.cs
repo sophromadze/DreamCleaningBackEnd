@@ -43,7 +43,6 @@ namespace DreamCleaningBackend.Models
         public DateTime? SubscriptionStartDate { get; set; }
         public DateTime? SubscriptionExpiryDate { get; set; }
         public DateTime? LastOrderDate { get; set; }
-        public int SubscriptionOrderCount { get; set; } = 0;
 
         // First time order discount
         public bool FirstTimeOrder { get; set; } = true;

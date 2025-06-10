@@ -12,7 +12,6 @@
         public string? SubscriptionName { get; set; }
         public decimal? SubscriptionDiscountPercentage { get; set; }
         public DateTime? SubscriptionExpiryDate { get; set; }
-        public int SubscriptionOrderCount { get; set; }
         public List<ApartmentDto> Apartments { get; set; } = new List<ApartmentDto>();
         // Placeholder for future orders
         // public List<OrderDto> Orders { get; set; } = new List<OrderDto>();

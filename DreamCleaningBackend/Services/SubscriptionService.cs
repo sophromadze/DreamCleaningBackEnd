@@ -25,7 +25,6 @@ namespace DreamCleaningBackend.Services
             user.SubscriptionStartDate = DateTime.UtcNow;
             user.SubscriptionExpiryDate = DateTime.UtcNow.AddDays(subscription.FrequencyDays);
             user.LastOrderDate = DateTime.UtcNow;
-            user.SubscriptionOrderCount = 1;
             user.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
@@ -61,7 +60,6 @@ namespace DreamCleaningBackend.Services
 
             user.SubscriptionExpiryDate = DateTime.UtcNow.AddDays(user.Subscription.FrequencyDays);
             user.LastOrderDate = DateTime.UtcNow;
-            user.SubscriptionOrderCount++;
             user.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
@@ -76,7 +74,6 @@ namespace DreamCleaningBackend.Services
             user.SubscriptionId = null;
             user.SubscriptionStartDate = null;
             user.SubscriptionExpiryDate = null;
-            user.SubscriptionOrderCount = 0;
             user.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
