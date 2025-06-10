@@ -335,7 +335,8 @@ namespace DreamCleaningBackend.Services
             order.SubTotal = newSubTotal;
 
             // Reapply original discount
-            var discountedSubTotal = newSubTotal - order.DiscountAmount;
+            var totalDiscounts = order.DiscountAmount + (order.SubscriptionDiscountAmount == 0 ? 0 : order.SubscriptionDiscountAmount);
+            var discountedSubTotal = newSubTotal - totalDiscounts;
             order.Tax = discountedSubTotal * 0.088m; // 8.8% tax
             order.Total = discountedSubTotal + order.Tax + order.Tips;
 
@@ -379,8 +380,6 @@ namespace DreamCleaningBackend.Services
 
             return true;
         }
-
-        // In OrderService.cs, update the CalculateAdditionalAmount method:
 
         public async Task<decimal> CalculateAdditionalAmount(int orderId, UpdateOrderDto updateOrderDto)
         {
