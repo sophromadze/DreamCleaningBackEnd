@@ -117,23 +117,23 @@ namespace DreamCleaningBackend.Controllers
             return Ok(result);
         }
 
-        [HttpGet("frequencies")]
-        public async Task<ActionResult<List<FrequencyDto>>> GetFrequencies()
+        [HttpGet("subscriptions")]
+        public async Task<ActionResult<List<SubscriptionDto>>> GetSubscriptions()
         {
-            var frequencies = await _context.Frequencies
+            var subscriptions = await _context.Subscriptions
                 .Where(f => f.IsActive)
                 .OrderBy(f => f.DisplayOrder)
-                .Select(f => new FrequencyDto
+                .Select(f => new SubscriptionDto
                 {
                     Id = f.Id,
                     Name = f.Name,
                     Description = f.Description,
                     DiscountPercentage = f.DiscountPercentage,
-                    FrequencyDays = f.FrequencyDays
+                    SubscriptionDays = f.SubscriptionDays
                 })
                 .ToListAsync();
 
-            return Ok(frequencies);
+            return Ok(subscriptions);
         }
 
         [HttpGet("user-subscription")]
@@ -295,7 +295,7 @@ namespace DreamCleaningBackend.Controllers
                     Tips = dto.Tips,
                     Status = "Pending",
                     OrderDate = DateTime.UtcNow,
-                    FrequencyId = dto.FrequencyId,
+                    SubscriptionId = dto.SubscriptionId,
                     OrderServices = new List<OrderService>(),
                     OrderExtraServices = new List<OrderExtraService>()
                 };
@@ -516,41 +516,9 @@ namespace DreamCleaningBackend.Controllers
                     totalDuration = dto.TotalDuration;
                 }
 
-                //// Set MaidsCount from the frontend
-                //order.MaidsCount = dto.MaidsCount;
+                //// Apply subscription discount
+                var subscription = await _context.Subscriptions.FindAsync(dto.SubscriptionId);
 
-                //// If MaidsCount is 0 (not sent from frontend), calculate it
-                //if (order.MaidsCount == 0)
-                //{
-                //    // Check if cleaners are explicitly selected
-                //    var cleanerService = order.OrderServices.FirstOrDefault(os =>
-                //    {
-                //        var service = _context.Services.Find(os.ServiceId);
-                //        return service?.ServiceRelationType == "cleaner";
-                //    });
-
-                //    if (cleanerService != null)
-                //    {
-                //        // Use the cleaner count
-                //        order.MaidsCount = cleanerService.Quantity;
-                //        Console.WriteLine($"Calculated MaidsCount from cleaner service: {order.MaidsCount}");
-                //    }
-                //    else
-                //    {
-                //        // Calculate based on duration (every 6 hours = 1 maid)
-                //        decimal totalHours = totalDuration / 60m;
-                //        order.MaidsCount = Math.Max(1, (int)Math.Ceiling(totalHours / 6m));
-                //        Console.WriteLine($"Calculated MaidsCount from duration: {order.MaidsCount}");
-                //    }
-                //}
-
-                //// Apply frequency discount
-                //order.DiscountAmount = 0;
-                var frequency = await _context.Frequencies.FindAsync(dto.FrequencyId);
-                //if (frequency != null && frequency.DiscountPercentage > 0)
-                //{
-                //    order.DiscountAmount = subTotal * (frequency.DiscountPercentage / 100);
-                //}
 
                 // Set MaidsCount from the frontend
                 order.MaidsCount = dto.MaidsCount;
@@ -578,48 +546,7 @@ namespace DreamCleaningBackend.Controllers
                     }
                 }
 
-                //if (dto.DiscountAmount > 0)
-                //{
-                //    order.DiscountAmount = dto.DiscountAmount;
-                //    Console.WriteLine($"Using frontend discount amount: ${dto.DiscountAmount}");
-                //}
-                //else
-                //{
-                //    // Only calculate discount if not provided by frontend
-                //    order.DiscountAmount = 0;
-
-                //    // Apply frequency discount
-                //    if (frequency != null && frequency.DiscountPercentage > 0)
-                //    {
-                //        order.DiscountAmount += subTotal * (frequency.DiscountPercentage / 100m);
-                //    }
-
-                //    // Apply first time discount (20%) if promo code is "firstUse"
-                //    if (dto.PromoCode == "firstUse" && user.FirstTimeOrder)
-                //    {
-                //        order.DiscountAmount += subTotal * 0.20m;
-                //    }
-
-                //    // Apply promo code discount
-                //    if (!string.IsNullOrEmpty(dto.PromoCode) && dto.PromoCode != "firstUse")
-                //    {
-                //        var promoCode = await _context.PromoCodes
-                //            .FirstOrDefaultAsync(p => p.Code == dto.PromoCode && p.IsActive);
-
-                //        if (promoCode != null)
-                //        {
-                //            if (promoCode.IsPercentage)
-                //            {
-                //                order.DiscountAmount += subTotal * (promoCode.DiscountValue / 100m);
-                //            }
-                //            else
-                //            {
-                //                order.DiscountAmount += promoCode.DiscountValue;
-                //            }
-                //        }
-                //    }
-                //}
-
+               
                 order.DiscountAmount = dto.DiscountAmount; // This is promo/first-time discount ONLY
                 order.SubscriptionDiscountAmount = dto.SubscriptionDiscountAmount; // Add this line if property exists
 
@@ -645,7 +572,7 @@ namespace DreamCleaningBackend.Controllers
                 await _context.SaveChangesAsync();
 
                 // Handle subscription activation/renewal
-                if (frequency != null && frequency.FrequencyDays > 0)
+                if (subscription != null && subscription.SubscriptionDays > 0)
                 {
                     var userForSubscription = await _context.Users
                         .Include(u => u.Subscription)
@@ -655,13 +582,13 @@ namespace DreamCleaningBackend.Controllers
 
                     if (!hasActiveSubscription)
                     {
-                        // Find corresponding subscription based on frequency days
-                        var subscription = await _context.Subscriptions
-                            .FirstOrDefaultAsync(s => s.FrequencyDays == frequency.FrequencyDays);
+                        // FIXED: Changed variable name from 'subscription' to 'userSubscription'
+                        var userSubscription = await _context.Subscriptions
+                            .FirstOrDefaultAsync(s => s.SubscriptionDays == subscription.SubscriptionDays);
 
-                        if (subscription != null)
+                        if (userSubscription != null)
                         {
-                            await _subscriptionService.ActivateSubscription(userId, subscription.Id);
+                            await _subscriptionService.ActivateSubscription(userId, userSubscription.Id);
                         }
                     }
                     else if (userForSubscription.SubscriptionId.HasValue)
@@ -827,27 +754,17 @@ namespace DreamCleaningBackend.Controllers
                 order.PaymentIntentId = "pi_simulated_" + Guid.NewGuid().ToString();
 
                 // Handle subscription activation for paid orders
-                var frequency = await _context.Frequencies.FindAsync(order.FrequencyId);
-                if (frequency != null && frequency.FrequencyDays > 0)
+                var subscription = await _context.Subscriptions.FindAsync(order.SubscriptionId);
+                if (subscription != null && subscription.SubscriptionDays > 0)
                 {
-                    var userForSubscription = await _context.Users
-                        .Include(u => u.Subscription)
-                        .FirstOrDefaultAsync(u => u.Id == userId);
-
                     bool hasActiveSubscription = await _subscriptionService.CheckAndUpdateSubscriptionStatus(userId);
 
                     if (!hasActiveSubscription)
                     {
-                        // Find corresponding subscription based on frequency days
-                        var subscription = await _context.Subscriptions
-                            .FirstOrDefaultAsync(s => s.FrequencyDays == frequency.FrequencyDays);
-
-                        if (subscription != null)
-                        {
-                            await _subscriptionService.ActivateSubscription(userId, subscription.Id);
-                        }
+                        // Use the subscription we already have - no need to query again
+                        await _subscriptionService.ActivateSubscription(userId, subscription.Id);
                     }
-                    else if (userForSubscription.SubscriptionId.HasValue)
+                    else
                     {
                         // Renew existing subscription
                         await _subscriptionService.RenewSubscription(userId);

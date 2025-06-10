@@ -1,30 +1,27 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace DreamCleaningBackend.Models
 {
     public class Subscription
     {
         public int Id { get; set; }
-
         [Required]
         [StringLength(50)]
-        public string Name { get; set; } // e.g., "Weekly", "Bi-Weekly", "Monthly"
-
+        public string Name { get; set; } // e.g., "One Time", "Weekly", "Bi-Weekly", "Monthly"
         [StringLength(200)]
         public string? Description { get; set; }
-
-        // Frequency in days
-        public int FrequencyDays { get; set; } // 7 for weekly, 14 for bi-weekly, etc.
-
-        // Discount percentage for subscription
+        // Discount percentage for this subscription
+        [Column(TypeName = "decimal(5,2)")]
         public decimal DiscountPercentage { get; set; } = 0;
-
-        // Price modifier (if any)
-        public decimal PriceModifier { get; set; } = 1.0m;
-
+        // Subscription period in days (0 for one-time)
+        public int SubscriptionDays { get; set; } 
         public bool IsActive { get; set; } = true;
-
-        // Navigation property
-        public virtual ICollection<User> Users { get; set; } = new List<User>();
+        public int DisplayOrder { get; set; }
+        // Navigation properties
+        public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
+        // Audit fields
+        public DateTime CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
     }
 }

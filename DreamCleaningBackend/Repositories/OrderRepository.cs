@@ -26,7 +26,7 @@ namespace DreamCleaningBackend.Repositories
         {
             return await _context.Orders
                 .Include(o => o.ServiceType)
-                .Include(o => o.Frequency)
+                .Include(o => o.Subscription)
                 .Include(o => o.OrderServices)
                     .ThenInclude(os => os.Service)
                 .Include(o => o.OrderExtraServices)

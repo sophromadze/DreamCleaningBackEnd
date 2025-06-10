@@ -19,7 +19,6 @@ namespace DreamCleaningBackend.Data
         public DbSet<ServiceType> ServiceTypes { get; set; }
         public DbSet<Service> Services { get; set; }
         public DbSet<ExtraService> ExtraServices { get; set; }
-        public DbSet<Frequency> Frequencies { get; set; }
         public DbSet<OrderService> OrderServices { get; set; }
         public DbSet<OrderExtraService> OrderExtraServices { get; set; }
         public DbSet<PromoCode> PromoCodes { get; set; }
@@ -45,11 +44,11 @@ namespace DreamCleaningBackend.Data
                 .OnDelete(DeleteBehavior.Cascade);
 
             // Subscription configuration
-            modelBuilder.Entity<User>()
-                .HasOne(u => u.Subscription)
-                .WithMany(s => s.Users)
-                .HasForeignKey(u => u.SubscriptionId)
-                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.Subscription)
+                .WithMany(s => s.Orders)
+                .HasForeignKey(o => o.SubscriptionId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Order configuration
             modelBuilder.Entity<Order>()
@@ -68,12 +67,6 @@ namespace DreamCleaningBackend.Data
                 .HasOne(o => o.ServiceType)
                 .WithMany(st => st.Orders)
                 .HasForeignKey(o => o.ServiceTypeId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<Order>()
-                .HasOne(o => o.Frequency)
-                .WithMany(f => f.Orders)
-                .HasForeignKey(o => o.FrequencyId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             // Service configuration
@@ -126,82 +119,42 @@ namespace DreamCleaningBackend.Data
 
             // Seed initial subscriptions
             modelBuilder.Entity<Subscription>().HasData(
-                new Subscription
-                {
-                    Id = 1,
-                    Name = "One-Time",
-                    Description = "Single cleaning service",
-                    FrequencyDays = 0,
-                    DiscountPercentage = 0,
-                    IsActive = true
-                },
+                 new Subscription
+                 {
+                     Id = 1,
+                     Name = "One Time",
+                     Description = "Single cleaning service",
+                     SubscriptionDays = 0,
+                     DiscountPercentage = 0,
+                     DisplayOrder = 1,
+                     CreatedAt = DateTime.UtcNow
+                 },
                 new Subscription
                 {
                     Id = 2,
                     Name = "Weekly",
                     Description = "Cleaning every week",
-                    FrequencyDays = 7,
-                    DiscountPercentage = 15,
-                    IsActive = true
-                },
-                new Subscription
-                {
-                    Id = 3,
-                    Name = "Bi-Weekly",
-                    Description = "Cleaning every two weeks",
-                    FrequencyDays = 14,
-                    DiscountPercentage = 8,
-                    IsActive = true
-                },
-                new Subscription
-                {
-                    Id = 4,
-                    Name = "Monthly",
-                    Description = "Cleaning once a month",
-                    FrequencyDays = 30,
-                    DiscountPercentage = 3,
-                    IsActive = true
-                }
-            );
-
-            // Seed Frequencies
-            modelBuilder.Entity<Frequency>().HasData(
-                new Frequency
-                {
-                    Id = 1,
-                    Name = "One Time",
-                    Description = "Single cleaning service",
-                    FrequencyDays = 0,
-                    DiscountPercentage = 0,
-                    DisplayOrder = 1,
-                    CreatedAt = DateTime.UtcNow
-                },
-                new Frequency
-                {
-                    Id = 2,
-                    Name = "Weekly",
-                    Description = "Cleaning every week",
-                    FrequencyDays = 7,
+                    SubscriptionDays = 7,
                     DiscountPercentage = 15,
                     DisplayOrder = 2,
                     CreatedAt = DateTime.UtcNow
                 },
-                new Frequency
+                new Subscription
                 {
                     Id = 3,
                     Name = "Bi-Weekly",
                     Description = "Cleaning every two weeks",
-                    FrequencyDays = 14,
+                    SubscriptionDays = 14,
                     DiscountPercentage = 10,
                     DisplayOrder = 3,
                     CreatedAt = DateTime.UtcNow
                 },
-                new Frequency
+                new Subscription
                 {
                     Id = 4,
                     Name = "Monthly",
                     Description = "Cleaning once a month",
-                    FrequencyDays = 30,
+                    SubscriptionDays = 30,
                     DiscountPercentage = 5,
                     DisplayOrder = 4,
                     CreatedAt = DateTime.UtcNow

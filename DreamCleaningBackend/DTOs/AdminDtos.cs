@@ -160,8 +160,8 @@ namespace DreamCleaningBackend.DTOs
         public int DisplayOrder { get; set; }
     }
 
-    // Frequency DTOs
-    public class CreateFrequencyDto
+    // Subscription DTOs
+    public class CreateSubscriptionDto
     {
         [Required]
         public string Name { get; set; }
@@ -169,11 +169,11 @@ namespace DreamCleaningBackend.DTOs
         [Required]
         public decimal DiscountPercentage { get; set; }
         [Required]
-        public int FrequencyDays { get; set; }
+        public int SubscriptionDays { get; set; } 
         public int DisplayOrder { get; set; }
     }
 
-    public class UpdateFrequencyDto
+    public class UpdateSubscriptionDto
     {
         [Required]
         public string Name { get; set; }
@@ -181,7 +181,7 @@ namespace DreamCleaningBackend.DTOs
         [Required]
         public decimal DiscountPercentage { get; set; }
         [Required]
-        public int FrequencyDays { get; set; }
+        public int SubscriptionDays { get; set; } 
         public int DisplayOrder { get; set; }
     }
 

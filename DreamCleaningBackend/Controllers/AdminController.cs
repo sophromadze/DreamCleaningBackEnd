@@ -652,90 +652,88 @@ namespace DreamCleaningBackend.Controllers
             return Ok();
         }
 
-        // Frequencies Management (rest of the code remains the same)
-        [HttpGet("frequencies")]
-        public async Task<ActionResult<List<FrequencyDto>>> GetFrequencies()
+        // Subscriptions Management
+        [HttpGet("subscriptions")]
+        public async Task<ActionResult<List<SubscriptionDto>>> GetSubscriptions()
         {
-            var frequencies = await _context.Frequencies
-                .Where(f => f.IsActive)
-                .OrderBy(f => f.DisplayOrder)
-                .Select(f => new FrequencyDto
+            var subscriptions = await _context.Subscriptions
+                .Where(s => s.IsActive)
+                .OrderBy(s => s.DisplayOrder)
+                .Select(s => new SubscriptionDto
                 {
-                    Id = f.Id,
-                    Name = f.Name,
-                    Description = f.Description,
-                    DiscountPercentage = f.DiscountPercentage,
-                    FrequencyDays = f.FrequencyDays
+                    Id = s.Id,
+                    Name = s.Name,
+                    Description = s.Description,
+                    DiscountPercentage = s.DiscountPercentage,
+                    SubscriptionDays = s.SubscriptionDays
                 })
                 .ToListAsync();
-
-            return Ok(frequencies);
+            return Ok(subscriptions);
         }
 
-        [HttpPost("frequencies")]
-        public async Task<ActionResult<FrequencyDto>> CreateFrequency(CreateFrequencyDto dto)
+        [HttpPost("subscriptions")]
+        public async Task<ActionResult<SubscriptionDto>> CreateSubscription(CreateSubscriptionDto dto)
         {
-            var frequency = new Frequency
+            var subscription = new Subscription
             {
                 Name = dto.Name,
                 Description = dto.Description,
                 DiscountPercentage = dto.DiscountPercentage,
-                FrequencyDays = dto.FrequencyDays,
+                SubscriptionDays = dto.SubscriptionDays,
                 DisplayOrder = dto.DisplayOrder,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             };
-
-            _context.Frequencies.Add(frequency);
+            _context.Subscriptions.Add(subscription);
             await _context.SaveChangesAsync();
 
-            return Ok(new FrequencyDto
+            return Ok(new SubscriptionDto
             {
-                Id = frequency.Id,
-                Name = frequency.Name,
-                Description = frequency.Description,
-                DiscountPercentage = frequency.DiscountPercentage,
-                FrequencyDays = frequency.FrequencyDays
+                Id = subscription.Id,
+                Name = subscription.Name,
+                Description = subscription.Description,
+                DiscountPercentage = subscription.DiscountPercentage,
+                SubscriptionDays = subscription.SubscriptionDays
             });
         }
 
-        [HttpPut("frequencies/{id}")]
-        public async Task<ActionResult<FrequencyDto>> UpdateFrequency(int id, UpdateFrequencyDto dto)
+        [HttpPut("subscriptions/{id}")]
+        public async Task<ActionResult<SubscriptionDto>> UpdateSubscription(int id, UpdateSubscriptionDto dto)
         {
-            var frequency = await _context.Frequencies.FindAsync(id);
-            if (frequency == null)
+            var subscription = await _context.Subscriptions.FindAsync(id);
+            if (subscription == null)
                 return NotFound();
 
-            frequency.Name = dto.Name;
-            frequency.Description = dto.Description;
-            frequency.DiscountPercentage = dto.DiscountPercentage;
-            frequency.FrequencyDays = dto.FrequencyDays;
-            frequency.DisplayOrder = dto.DisplayOrder;
-            frequency.UpdatedAt = DateTime.UtcNow;
+            subscription.Name = dto.Name;
+            subscription.Description = dto.Description;
+            subscription.DiscountPercentage = dto.DiscountPercentage;
+            subscription.SubscriptionDays = dto.SubscriptionDays;
+            subscription.DisplayOrder = dto.DisplayOrder;
+            subscription.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
-            return Ok(new FrequencyDto
+            return Ok(new SubscriptionDto
             {
-                Id = frequency.Id,
-                Name = frequency.Name,
-                Description = frequency.Description,
-                DiscountPercentage = frequency.DiscountPercentage,
-                FrequencyDays = frequency.FrequencyDays
+                Id = subscription.Id,
+                Name = subscription.Name,
+                Description = subscription.Description,
+                DiscountPercentage = subscription.DiscountPercentage,
+                SubscriptionDays = subscription.SubscriptionDays
             });
         }
 
-        [HttpDelete("frequencies/{id}")]
-        public async Task<ActionResult> DeleteFrequency(int id)
+        [HttpDelete("subscriptions/{id}")]
+        public async Task<ActionResult> DeleteSubscription(int id)
         {
-            var frequency = await _context.Frequencies.FindAsync(id);
-            if (frequency == null)
+            var subscription = await _context.Subscriptions.FindAsync(id);
+            if (subscription == null)
                 return NotFound();
 
-            frequency.IsActive = false;
-            frequency.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
+            subscription.IsActive = false;
+            subscription.UpdatedAt = DateTime.UtcNow;
 
+            await _context.SaveChangesAsync();
             return Ok();
         }
 

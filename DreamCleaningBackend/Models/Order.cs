@@ -60,9 +60,9 @@ namespace DreamCleaningBackend.Models
         [StringLength(50)]
         public string? PromoCode { get; set; }
 
-        // Frequency/Subscription
-        public int FrequencyId { get; set; }
-        public virtual Frequency Frequency { get; set; }
+        // Subscription
+        public int SubscriptionId { get; set; }
+        public virtual Subscription Subscription { get; set; }
 
         // Entry method
         [StringLength(100)]

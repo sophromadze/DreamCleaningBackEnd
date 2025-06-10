@@ -13,7 +13,7 @@ namespace DreamCleaningBackend.DTOs
         public List<BookingExtraServiceDto> ExtraServices { get; set; } = new List<BookingExtraServiceDto>();
 
         [Required]
-        public int FrequencyId { get; set; }
+        public int SubscriptionId { get; set; }
 
         [Required]
         public DateTime ServiceDate { get; set; }

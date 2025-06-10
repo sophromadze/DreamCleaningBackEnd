@@ -23,7 +23,7 @@ namespace DreamCleaningBackend.Services
 
             user.SubscriptionId = subscriptionId;
             user.SubscriptionStartDate = DateTime.UtcNow;
-            user.SubscriptionExpiryDate = DateTime.UtcNow.AddDays(subscription.FrequencyDays);
+            user.SubscriptionExpiryDate = DateTime.UtcNow.AddDays(subscription.SubscriptionDays);
             user.LastOrderDate = DateTime.UtcNow;
             user.UpdatedAt = DateTime.UtcNow;
 
@@ -58,7 +58,7 @@ namespace DreamCleaningBackend.Services
 
             if (user == null || user.Subscription == null) return false;
 
-            user.SubscriptionExpiryDate = DateTime.UtcNow.AddDays(user.Subscription.FrequencyDays);
+            user.SubscriptionExpiryDate = DateTime.UtcNow.AddDays(user.Subscription.SubscriptionDays);
             user.LastOrderDate = DateTime.UtcNow;
             user.UpdatedAt = DateTime.UtcNow;
 
