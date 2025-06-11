@@ -679,7 +679,6 @@ namespace DreamCleaningBackend.Controllers
         public async Task<ActionResult<List<SubscriptionDto>>> GetSubscriptions()
         {
             var subscriptions = await _context.Subscriptions
-                .Where(s => s.IsActive)
                 .OrderBy(s => s.DisplayOrder)
                 .Select(s => new SubscriptionDto
                 {
@@ -687,7 +686,8 @@ namespace DreamCleaningBackend.Controllers
                     Name = s.Name,
                     Description = s.Description,
                     DiscountPercentage = s.DiscountPercentage,
-                    SubscriptionDays = s.SubscriptionDays
+                    SubscriptionDays = s.SubscriptionDays,
+                    IsActive = s.IsActive  
                 })
                 .ToListAsync();
             return Ok(subscriptions);
@@ -761,6 +761,57 @@ namespace DreamCleaningBackend.Controllers
             await _context.SaveChangesAsync();
             return Ok();
         }
+
+        [HttpPost("subscriptions/{id}/deactivate")]
+        [RequirePermission(Permission.Deactivate)]
+        public async Task<ActionResult> DeactivateSubscription(int id)
+        {
+            try
+            {
+                var subscription = await _context.Subscriptions.FindAsync(id);
+                if (subscription == null)
+                {
+                    return NotFound(new { message = "Subscription not found" });
+                }
+
+                subscription.IsActive = false;
+                subscription.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = "Subscription deactivated successfully", subscription });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error deactivating subscription", error = ex.Message });
+            }
+        }
+
+        [HttpPost("subscriptions/{id}/activate")]
+        [RequirePermission(Permission.Activate)]
+        public async Task<ActionResult> ActivateSubscription(int id)
+        {
+            try
+            {
+                var subscription = await _context.Subscriptions.FindAsync(id);
+                if (subscription == null)
+                {
+                    return NotFound(new { message = "Subscription not found" });
+                }
+
+                subscription.IsActive = true;
+                subscription.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = "Subscription activated successfully", subscription });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error activating subscription", error = ex.Message });
+            }
+        }
+
 
         // Promo Codes Management (keeping existing)
         [HttpGet("promo-codes")]
@@ -844,7 +895,6 @@ namespace DreamCleaningBackend.Controllers
             promoCode.ValidFrom = dto.ValidFrom;
             promoCode.ValidTo = dto.ValidTo;
             promoCode.MinimumOrderAmount = dto.MinimumOrderAmount;
-            promoCode.IsActive = dto.IsActive;
             promoCode.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
@@ -878,6 +928,56 @@ namespace DreamCleaningBackend.Controllers
             await _context.SaveChangesAsync();
 
             return Ok();
+        }
+
+        [HttpPost("promo-codes/{id}/deactivate")]
+        [RequirePermission(Permission.Deactivate)]
+        public async Task<ActionResult> DeactivatePromoCode(int id)
+        {
+            try
+            {
+                var promoCode = await _context.PromoCodes.FindAsync(id);
+                if (promoCode == null)
+                {
+                    return NotFound(new { message = "PromoCode not found" });
+                }
+
+                promoCode.IsActive = false;
+                promoCode.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = "PromoCode deactivated successfully", promoCode });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error deactivating promocode", error = ex.Message });
+            }
+        }
+
+        [HttpPost("promo-codes/{id}/activate")]
+        [RequirePermission(Permission.Activate)]
+        public async Task<ActionResult> ActivatePromoCode(int id)
+        {
+            try
+            {
+                var promoCode = await _context.PromoCodes.FindAsync(id);
+                if (promoCode == null)
+                {
+                    return NotFound(new { message = "PromoCode not found" });
+                }
+
+                promoCode.IsActive = true;
+                promoCode.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = "PromoCode activated successfully", promoCode });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error activating promocode", error = ex.Message });
+            }
         }
 
         // Users Management (keeping existing)
