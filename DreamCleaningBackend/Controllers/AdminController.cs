@@ -4,23 +4,28 @@ using Microsoft.EntityFrameworkCore;
 using DreamCleaningBackend.Data;
 using DreamCleaningBackend.DTOs;
 using DreamCleaningBackend.Models;
+using DreamCleaningBackend.Services.Interfaces;
+using DreamCleaningBackend.Attributes;
 
 namespace DreamCleaningBackend.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "Admin")]
+    [Authorize]
     public class AdminController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IPermissionService _permissionService;
 
-        public AdminController(ApplicationDbContext context)
+        public AdminController(ApplicationDbContext context, IPermissionService permissionService)
         {
             _context = context;
+            _permissionService = permissionService;
         }
 
         // Service Types Management
         [HttpGet("service-types")]
+        [RequirePermission(Permission.View)]
         public async Task<ActionResult<List<ServiceTypeDto>>> GetServiceTypes()
         {
             var serviceTypes = await _context.ServiceTypes
@@ -116,6 +121,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPost("service-types")]
+        [RequirePermission(Permission.Create)]
         public async Task<ActionResult<ServiceTypeDto>> CreateServiceType(CreateServiceTypeDto dto)
         {
             var serviceType = new ServiceType
@@ -142,6 +148,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPut("service-types/{id}")]
+        [RequirePermission(Permission.Update)]
         public async Task<ActionResult<ServiceTypeDto>> UpdateServiceType(int id, UpdateServiceTypeDto dto)
         {
             var serviceType = await _context.ServiceTypes.FindAsync(id);
@@ -167,6 +174,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPut("service-types/{id}/deactivate")]
+        [RequirePermission(Permission.Deactivate)]
         public async Task<ActionResult> DeactivateServiceType(int id)
         {
             var serviceType = await _context.ServiceTypes.FindAsync(id);
@@ -181,6 +189,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPut("service-types/{id}/activate")]
+        [RequirePermission(Permission.Activate)]
         public async Task<ActionResult> ActivateServiceType(int id)
         {
             var serviceType = await _context.ServiceTypes.FindAsync(id);
@@ -195,6 +204,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpDelete("service-types/{id}")]
+        [RequirePermission(Permission.Delete)]
         public async Task<ActionResult> DeleteServiceType(int id)
         {
             var serviceType = await _context.ServiceTypes
@@ -221,6 +231,7 @@ namespace DreamCleaningBackend.Controllers
 
         // Services Management
         [HttpGet("services")]
+        [RequirePermission(Permission.View)]
         public async Task<ActionResult<List<ServiceDto>>> GetServices()
         {
             var services = await _context.Services
@@ -248,6 +259,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPost("services")]
+        [RequirePermission(Permission.Create)]
         public async Task<ActionResult<ServiceDto>> CreateService(CreateServiceDto dto)
         {
             var service = new Service
@@ -291,8 +303,8 @@ namespace DreamCleaningBackend.Controllers
             });
         }
 
-
         [HttpPost("services/copy")]
+        [RequirePermission(Permission.Create)]
         public async Task<ActionResult<ServiceDto>> CopyService(CopyServiceDto dto)
         {
             var sourceService = await _context.Services.FindAsync(dto.SourceServiceId);
@@ -341,6 +353,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPut("services/{id}")]
+        [RequirePermission(Permission.Update)]
         public async Task<ActionResult<ServiceDto>> UpdateService(int id, UpdateServiceDto dto)
         {
             var service = await _context.Services.FindAsync(id);
@@ -384,6 +397,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPut("services/{id}/deactivate")]
+        [RequirePermission(Permission.Deactivate)]
         public async Task<ActionResult> DeactivateService(int id)
         {
             var service = await _context.Services.FindAsync(id);
@@ -398,6 +412,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPut("services/{id}/activate")]
+        [RequirePermission(Permission.Activate)]
         public async Task<ActionResult> ActivateService(int id)
         {
             var service = await _context.Services.FindAsync(id);
@@ -433,9 +448,10 @@ namespace DreamCleaningBackend.Controllers
 
             return Ok();
         }
-
+        [RequirePermission(Permission.Deactivate)]
         // Extra Services Management
         [HttpGet("extra-services")]
+        [RequirePermission(Permission.View)]
         public async Task<ActionResult<List<ExtraServiceDto>>> GetExtraServices()
         {
             var extraServices = await _context.ExtraServices
@@ -463,6 +479,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPost("extra-services")]
+        [RequirePermission(Permission.Create)]
         public async Task<ActionResult<ExtraServiceDto>> CreateExtraService(CreateExtraServiceDto dto)
         {
             var extraService = new ExtraService
@@ -508,6 +525,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPost("extra-services/copy")]
+        [RequirePermission(Permission.Create)]
         public async Task<ActionResult<ExtraServiceDto>> CopyExtraService(CopyExtraServiceDto dto)
         {
             var sourceExtraService = await _context.ExtraServices.FindAsync(dto.SourceExtraServiceId);
@@ -557,6 +575,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPut("extra-services/{id}")]
+        [RequirePermission(Permission.Update)]
         public async Task<ActionResult<ExtraServiceDto>> UpdateExtraService(int id, UpdateExtraServiceDto dto)
         {
             var extraService = await _context.ExtraServices.FindAsync(id);
@@ -601,6 +620,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPut("extra-services/{id}/deactivate")]
+        [RequirePermission(Permission.Deactivate)]
         public async Task<ActionResult> DeactivateExtraService(int id)
         {
             var extraService = await _context.ExtraServices.FindAsync(id);
@@ -615,6 +635,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPut("extra-services/{id}/activate")]
+        [RequirePermission(Permission.Activate)]
         public async Task<ActionResult> ActivateExtraService(int id)
         {
             var extraService = await _context.ExtraServices.FindAsync(id);
@@ -629,6 +650,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpDelete("extra-services/{id}")]
+        [RequirePermission(Permission.Delete)]
         public async Task<ActionResult> DeleteExtraService(int id)
         {
             var extraService = await _context.ExtraServices
@@ -653,6 +675,7 @@ namespace DreamCleaningBackend.Controllers
 
         // Subscriptions Management
         [HttpGet("subscriptions")]
+        [RequirePermission(Permission.View)]
         public async Task<ActionResult<List<SubscriptionDto>>> GetSubscriptions()
         {
             var subscriptions = await _context.Subscriptions
@@ -671,6 +694,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPost("subscriptions")]
+        [RequirePermission(Permission.Create)]
         public async Task<ActionResult<SubscriptionDto>> CreateSubscription(CreateSubscriptionDto dto)
         {
             var subscription = new Subscription
@@ -697,6 +721,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPut("subscriptions/{id}")]
+        [RequirePermission(Permission.Update)]
         public async Task<ActionResult<SubscriptionDto>> UpdateSubscription(int id, UpdateSubscriptionDto dto)
         {
             var subscription = await _context.Subscriptions.FindAsync(id);
@@ -723,6 +748,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpDelete("subscriptions/{id}")]
+        [RequirePermission(Permission.Delete)]
         public async Task<ActionResult> DeleteSubscription(int id)
         {
             var subscription = await _context.Subscriptions.FindAsync(id);
@@ -738,6 +764,7 @@ namespace DreamCleaningBackend.Controllers
 
         // Promo Codes Management (keeping existing)
         [HttpGet("promo-codes")]
+        [RequirePermission(Permission.View)]
         public async Task<ActionResult<List<PromoCodeDto>>> GetPromoCodes()
         {
             var promoCodes = await _context.PromoCodes
@@ -763,6 +790,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPost("promo-codes")]
+        [RequirePermission(Permission.Create)]
         public async Task<ActionResult<PromoCodeDto>> CreatePromoCode(CreatePromoCodeDto dto)
         {
             var promoCode = new PromoCode
@@ -801,6 +829,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPut("promo-codes/{id}")]
+        [RequirePermission(Permission.Update)]
         public async Task<ActionResult<PromoCodeDto>> UpdatePromoCode(int id, UpdatePromoCodeDto dto)
         {
             var promoCode = await _context.PromoCodes.FindAsync(id);
@@ -838,6 +867,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpDelete("promo-codes/{id}")]
+        [RequirePermission(Permission.Delete)]
         public async Task<ActionResult> DeletePromoCode(int id)
         {
             var promoCode = await _context.PromoCodes.FindAsync(id);
@@ -852,11 +882,13 @@ namespace DreamCleaningBackend.Controllers
 
         // Users Management (keeping existing)
         [HttpGet("users")]
+        [RequirePermission(Permission.View)]
         public async Task<ActionResult<List<UserAdminDto>>> GetUsers()
         {
+            var currentUserRole = GetCurrentUserRole();
+
             var users = await _context.Users
                 .Include(u => u.Subscription)
-                .OrderByDescending(u => u.CreatedAt)
                 .Select(u => new UserAdminDto
                 {
                     Id = u.Id,
@@ -873,28 +905,79 @@ namespace DreamCleaningBackend.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(users);
+            // Include current user role in response for frontend to use
+            return Ok(new
+            {
+                users = users,
+                currentUserRole = currentUserRole.ToString()
+            });
+
         }
 
         [HttpPut("users/{id}/role")]
+        [RequirePermission(Permission.Update)]
         public async Task<ActionResult> UpdateUserRole(int id, UpdateUserRoleDto dto)
         {
-            var user = await _context.Users.FindAsync(id);
-            if (user == null)
+            // Get current user's role
+            var currentUserRole = GetCurrentUserRole();
+
+            // Get the target user
+            var targetUser = await _context.Users.FindAsync(id);
+            if (targetUser == null)
                 return NotFound();
 
-            if (Enum.TryParse<UserRole>(dto.Role, out var role))
+            // Parse the new role
+            if (!Enum.TryParse<UserRole>(dto.Role, out var newRole))
+                return BadRequest("Invalid role");
+
+            // Apply role change restrictions
+            var validationResult = ValidateRoleChange(currentUserRole, targetUser.Role, newRole);
+            if (!validationResult.IsValid)
+                return BadRequest(new { message = validationResult.ErrorMessage });
+
+            // Update the role
+            targetUser.Role = newRole;
+            targetUser.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Role updated successfully" });
+        }
+
+        private UserRole GetCurrentUserRole()
+        {
+            var roleClaim = User.FindFirst("Role")?.Value;
+            Enum.TryParse<UserRole>(roleClaim, out var role);
+            return role;
+        }
+
+        private (bool IsValid, string ErrorMessage) ValidateRoleChange(UserRole currentUserRole, UserRole targetCurrentRole, UserRole newRole)
+        {
+            // Moderators cannot change roles at all (they don't have Update permission, but double-check)
+            if (currentUserRole == UserRole.Moderator)
+                return (false, "Moderators cannot change user roles");
+
+            // Admins cannot assign SuperAdmin role
+            if (currentUserRole == UserRole.Admin && newRole == UserRole.SuperAdmin)
+                return (false, "Admins cannot assign SuperAdmin role");
+
+            // Admins cannot remove SuperAdmin role from a SuperAdmin
+            if (currentUserRole == UserRole.Admin && targetCurrentRole == UserRole.SuperAdmin)
+                return (false, "Admins cannot modify SuperAdmin users");
+
+            // Users cannot demote themselves from SuperAdmin (optional safety check)
+            var currentUserId = User.FindFirst("UserId")?.Value;
+            if (currentUserId != null && targetCurrentRole == UserRole.SuperAdmin && newRole != UserRole.SuperAdmin)
             {
-                user.Role = role;
-                user.UpdatedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync();
-                return Ok();
+                // Check if user is trying to demote themselves
+                // This is optional - you may want to allow SuperAdmins to demote themselves
+                // return (false, "Cannot remove your own SuperAdmin role");
             }
 
-            return BadRequest("Invalid role");
+            return (true, string.Empty);
         }
 
         [HttpPut("users/{id}/status")]
+        [RequirePermission(Permission.Update)]
         public async Task<ActionResult> UpdateUserStatus(int id, UpdateUserStatusDto dto)
         {
             var user = await _context.Users.FindAsync(id);
@@ -906,6 +989,31 @@ namespace DreamCleaningBackend.Controllers
             await _context.SaveChangesAsync();
 
             return Ok();
+        }
+
+        [HttpGet("permissions")]
+        [Authorize]
+        public ActionResult<object> GetUserPermissions()
+        {
+            var roleClaim = User.FindFirst("Role")?.Value;
+            if (!Enum.TryParse<UserRole>(roleClaim, out var userRole))
+            {
+                return BadRequest("Invalid role");
+            }
+
+            return Ok(new
+            {
+                role = userRole.ToString(),
+                permissions = new
+                {
+                    canView = _permissionService.CanView(userRole),
+                    canCreate = _permissionService.CanCreate(userRole),
+                    canUpdate = _permissionService.CanUpdate(userRole),
+                    canDelete = _permissionService.CanDelete(userRole),
+                    canActivate = _permissionService.CanActivate(userRole),
+                    canDeactivate = _permissionService.CanDeactivate(userRole)
+                }
+            });
         }
     }
 }
