@@ -267,7 +267,10 @@ namespace DreamCleaningBackend.Services
         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
         new Claim(ClaimTypes.Email, user.Email),
         new Claim(ClaimTypes.Name, $"{user.FirstName} {user.LastName}"),
+        // IMPORTANT: Add both ClaimTypes.Role and custom "Role" claim
         new Claim(ClaimTypes.Role, user.Role.ToString()),
+        new Claim("Role", user.Role.ToString()), 
+        new Claim("UserId", user.Id.ToString()), 
         new Claim("FirstName", user.FirstName),
         new Claim("LastName", user.LastName),
         new Claim("FirstTimeOrder", user.FirstTimeOrder.ToString()),

@@ -427,6 +427,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpDelete("services/{id}")]
+        [RequirePermission(Permission.Delete)]
         public async Task<ActionResult> DeleteService(int id)
         {
             var service = await _context.Services
@@ -448,8 +449,7 @@ namespace DreamCleaningBackend.Controllers
 
             return Ok();
         }
-        [RequirePermission(Permission.Deactivate)]
-        // Extra Services Management
+        
         [HttpGet("extra-services")]
         [RequirePermission(Permission.View)]
         public async Task<ActionResult<List<ExtraServiceDto>>> GetExtraServices()
