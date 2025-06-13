@@ -169,7 +169,7 @@ namespace DreamCleaningBackend.DTOs
         [Required]
         public decimal DiscountPercentage { get; set; }
         [Required]
-        public int SubscriptionDays { get; set; } 
+        public int SubscriptionDays { get; set; }
         public int DisplayOrder { get; set; }
     }
 
@@ -181,7 +181,7 @@ namespace DreamCleaningBackend.DTOs
         [Required]
         public decimal DiscountPercentage { get; set; }
         [Required]
-        public int SubscriptionDays { get; set; } 
+        public int SubscriptionDays { get; set; }
         public int DisplayOrder { get; set; }
     }
 
@@ -317,5 +317,11 @@ namespace DreamCleaningBackend.DTOs
         public int SourceExtraServiceId { get; set; }
         [Required]
         public int TargetServiceTypeId { get; set; }
+    }
+
+    public class UpdateOrderStatusDto
+    {
+        [Required]
+        public string Status { get; set; }
     }
 }

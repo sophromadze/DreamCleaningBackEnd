@@ -22,6 +22,32 @@ namespace DreamCleaningBackend.Services
             _context = context;
         }
 
+        public async Task<List<OrderListDto>> GetAllOrdersForAdmin()
+        {
+            // Get ALL orders from the database without filtering by userId
+            var orders = await _context.Orders
+                .Include(o => o.ServiceType)
+                .Include(o => o.User)
+                .OrderByDescending(o => o.OrderDate)
+                .ToListAsync();
+
+            return orders.Select(o => new OrderListDto
+            {
+                Id = o.Id,
+                UserId = o.UserId,
+                ContactEmail = o.ContactEmail,
+                ContactFirstName = o.ContactFirstName,
+                ContactLastName = o.ContactLastName,
+                ServiceTypeName = o.ServiceType?.Name ?? "",
+                ServiceDate = o.ServiceDate,
+                ServiceTime = o.ServiceTime,
+                Status = o.Status,
+                Total = o.Total,
+                ServiceAddress = o.ServiceAddress + (string.IsNullOrEmpty(o.AptSuite) ? "" : $", {o.AptSuite}"),
+                OrderDate = o.OrderDate
+            }).ToList();
+        }
+
         public async Task<List<OrderListDto>> GetUserOrders(int userId)
         {
             var orders = await _orderRepository.GetUserOrdersAsync(userId);
@@ -29,12 +55,16 @@ namespace DreamCleaningBackend.Services
             return orders.Select(o => new OrderListDto
             {
                 Id = o.Id,
+                UserId = o.UserId,  
+                ContactEmail = o.ContactEmail,  
+                ContactFirstName = o.ContactFirstName,  
+                ContactLastName = o.ContactLastName,  
                 ServiceTypeName = o.ServiceType?.Name ?? "",
                 ServiceDate = o.ServiceDate,
                 ServiceTime = o.ServiceTime,
                 Status = o.Status,
                 Total = o.Total,
-                ServiceAddress = o.ServiceAddress + (string.IsNullOrEmpty(o.AptSuite) ? "" : ", " + o.AptSuite),
+                ServiceAddress = o.ServiceAddress + (string.IsNullOrEmpty(o.AptSuite) ? "" : $", {o.AptSuite}"),
                 OrderDate = o.OrderDate
             }).ToList();
         }

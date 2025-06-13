@@ -10,6 +10,6 @@
         Activate = 16,
         Deactivate = 32,
         ManageRoles = 64,
-        ManageSuperAdminRoles = 128  
+        ManageSuperAdminRoles = 128
     }
 }

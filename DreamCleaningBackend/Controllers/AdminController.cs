@@ -16,11 +16,13 @@ namespace DreamCleaningBackend.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IPermissionService _permissionService;
+        private readonly IOrderService _orderService;
 
-        public AdminController(ApplicationDbContext context, IPermissionService permissionService)
+        public AdminController(ApplicationDbContext context, IPermissionService permissionService, IOrderService orderService)
         {
             _context = context;
             _permissionService = permissionService;
+            _orderService = orderService;
         }
 
         // Service Types Management
@@ -449,7 +451,7 @@ namespace DreamCleaningBackend.Controllers
 
             return Ok();
         }
-        
+
         [HttpGet("extra-services")]
         [RequirePermission(Permission.View)]
         public async Task<ActionResult<List<ExtraServiceDto>>> GetExtraServices()
@@ -687,7 +689,7 @@ namespace DreamCleaningBackend.Controllers
                     Description = s.Description,
                     DiscountPercentage = s.DiscountPercentage,
                     SubscriptionDays = s.SubscriptionDays,
-                    IsActive = s.IsActive  
+                    IsActive = s.IsActive
                 })
                 .ToListAsync();
             return Ok(subscriptions);
@@ -1080,12 +1082,28 @@ namespace DreamCleaningBackend.Controllers
         [RequirePermission(Permission.Update)]
         public async Task<ActionResult> UpdateUserStatus(int id, UpdateUserStatusDto dto)
         {
-            var user = await _context.Users.FindAsync(id);
-            if (user == null)
+            var targetUser = await _context.Users.FindAsync(id);
+            if (targetUser == null)
                 return NotFound();
 
-            user.IsActive = dto.IsActive;
-            user.UpdatedAt = DateTime.UtcNow;
+            var currentUserRole = GetCurrentUserRole();
+            var targetUserRole = targetUser.Role;
+
+            // Prevent admins from deactivating/activating SuperAdmins
+            if (currentUserRole == UserRole.Admin && targetUserRole == UserRole.SuperAdmin)
+            {
+                return BadRequest(new { message = "Admins cannot modify SuperAdmin status" });
+            }
+
+            // Optional: Prevent users from deactivating themselves
+            var currentUserId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+            if (currentUserId == id && !dto.IsActive)
+            {
+                return BadRequest(new { message = "You cannot deactivate yourself" });
+            }
+
+            targetUser.IsActive = dto.IsActive;
+            targetUser.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
             return Ok();
@@ -1114,6 +1132,151 @@ namespace DreamCleaningBackend.Controllers
                     canDeactivate = _permissionService.CanDeactivate(userRole)
                 }
             });
+        }
+
+        // Orders Management
+        [HttpGet("orders")]
+        [RequirePermission(Permission.View)]
+        public async Task<ActionResult<List<OrderListDto>>> GetAllOrders()
+        {
+            try
+            {
+                var orders = await _orderService.GetAllOrdersForAdmin();
+                return Ok(orders);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+        
+        [HttpGet("orders/{orderId}")]
+        [RequirePermission(Permission.View)]
+        public async Task<ActionResult<OrderDto>> GetOrderDetails(int orderId)
+        {
+            try
+            {
+                // For admin, we don't need to check userId
+                var order = await _context.Orders
+                    .Include(o => o.ServiceType)
+                    .Include(o => o.Subscription)
+                    .Include(o => o.OrderServices)
+                        .ThenInclude(os => os.Service)
+                    .Include(o => o.OrderExtraServices)
+                        .ThenInclude(oes => oes.ExtraService)
+                    .FirstOrDefaultAsync(o => o.Id == orderId);
+
+                if (order == null)
+                    return NotFound();
+
+                return new OrderDto
+                {
+                    Id = order.Id,
+                    UserId = order.UserId,
+                    ServiceTypeId = order.ServiceTypeId,
+                    ServiceTypeName = order.ServiceType?.Name ?? "",
+                    OrderDate = order.OrderDate,
+                    ServiceDate = order.ServiceDate,
+                    ServiceTime = order.ServiceTime,
+                    Status = order.Status,
+                    SubTotal = order.SubTotal,
+                    Tax = order.Tax,
+                    Tips = order.Tips,
+                    Total = order.Total,
+                    DiscountAmount = order.DiscountAmount,
+                    SubscriptionDiscountAmount = order.SubscriptionDiscountAmount,
+                    PromoCode = order.PromoCode,
+                    SubscriptionId = order.SubscriptionId,
+                    SubscriptionName = order.Subscription?.Name ?? "",
+                    EntryMethod = order.EntryMethod,
+                    SpecialInstructions = order.SpecialInstructions,
+                    ContactFirstName = order.ContactFirstName,
+                    ContactLastName = order.ContactLastName,
+                    ContactEmail = order.ContactEmail,
+                    ContactPhone = order.ContactPhone,
+                    ServiceAddress = order.ServiceAddress,
+                    AptSuite = order.AptSuite,
+                    City = order.City,
+                    State = order.State,
+                    ZipCode = order.ZipCode,
+                    TotalDuration = order.TotalDuration,
+                    MaidsCount = order.MaidsCount,
+                    IsPaid = order.IsPaid,
+                    PaidAt = order.PaidAt,
+                    Services = order.OrderServices?.Select(os => new OrderServiceDto
+                    {
+                        Id = os.Id,
+                        ServiceId = os.ServiceId,
+                        ServiceName = os.Service?.Name ?? "",
+                        Quantity = os.Quantity,
+                        Cost = os.Cost,
+                        Duration = os.Duration
+                    }).ToList() ?? new List<OrderServiceDto>(),
+                    ExtraServices = order.OrderExtraServices?.Select(oes => new OrderExtraServiceDto
+                    {
+                        Id = oes.Id,
+                        ExtraServiceId = oes.ExtraServiceId,
+                        ExtraServiceName = oes.ExtraService?.Name ?? "",
+                        Quantity = oes.Quantity,
+                        Hours = oes.Hours,
+                        Cost = oes.Cost,
+                        Duration = oes.Duration
+                    }).ToList() ?? new List<OrderExtraServiceDto>()
+                };
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPut("orders/{orderId}/status")]
+        [RequirePermission(Permission.Update)]
+        public async Task<ActionResult> UpdateOrderStatus(int orderId, [FromBody] UpdateOrderStatusDto dto)
+        {
+            try
+            {
+                var order = await _context.Orders.FindAsync(orderId);
+                if (order == null)
+                    return NotFound();
+
+                // No special role check needed - any user with Update permission can change status
+                order.Status = dto.Status;
+                order.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+                return Ok(new { message = $"Order status updated to {dto.Status}" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("orders/{orderId}/cancel")]
+        [RequirePermission(Permission.Update)]  // Using Update permission
+        public async Task<ActionResult> CancelOrder(int orderId, [FromBody] CancelOrderDto dto)
+        {
+            try
+            {
+                var order = await _context.Orders.FindAsync(orderId);
+                if (order == null)
+                    return NotFound();
+
+                // Use proper casing for status values
+                if (order.Status == "Cancelled" || order.Status == "Done")
+                    return BadRequest(new { message = "Cannot cancel an order that is already cancelled or done." });
+
+                order.Status = "Cancelled";  // Capital C to match enum
+                order.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+                return Ok(new { message = "Order cancelled successfully." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
     }
 }

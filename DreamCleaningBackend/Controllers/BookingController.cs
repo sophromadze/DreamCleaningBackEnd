@@ -294,7 +294,7 @@ namespace DreamCleaningBackend.Controllers
                     PromoCode = dto.PromoCode,
                     Tips = dto.Tips,
                     Status = "Pending",
-                    OrderDate = DateTime.UtcNow,
+                    OrderDate = DateTime.Now,
                     SubscriptionId = dto.SubscriptionId,
                     OrderServices = new List<OrderService>(),
                     OrderExtraServices = new List<OrderExtraService>()

@@ -88,6 +88,10 @@ namespace DreamCleaningBackend.DTOs
     public class OrderListDto
     {
         public int Id { get; set; }
+        public int UserId { get; set; } 
+        public string ContactEmail { get; set; }  
+        public string ContactFirstName { get; set; }  
+        public string ContactLastName { get; set; }  
         public string ServiceTypeName { get; set; }
         public DateTime ServiceDate { get; set; }
         public TimeSpan ServiceTime { get; set; }
