@@ -7,6 +7,7 @@
         public string LastName { get; set; }
         public string Email { get; set; }
         public string? Phone { get; set; }
+        public string Role { get; set; }
         public bool FirstTimeOrder { get; set; }
         public int? SubscriptionId { get; set; }
         public string? SubscriptionName { get; set; }

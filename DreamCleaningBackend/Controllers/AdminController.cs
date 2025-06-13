@@ -6,6 +6,7 @@ using DreamCleaningBackend.DTOs;
 using DreamCleaningBackend.Models;
 using DreamCleaningBackend.Services.Interfaces;
 using DreamCleaningBackend.Attributes;
+using DreamCleaningBackend.Hubs;
 
 namespace DreamCleaningBackend.Controllers
 {
@@ -1020,6 +1021,8 @@ namespace DreamCleaningBackend.Controllers
         [RequirePermission(Permission.Update)]
         public async Task<ActionResult> UpdateUserRole(int id, UpdateUserRoleDto dto)
         {
+            Console.WriteLine($"Admin: Updating user {id} role to {dto.Role}");
+
             // Get current user's role
             var currentUserRole = GetCurrentUserRole();
 
@@ -1042,7 +1045,22 @@ namespace DreamCleaningBackend.Controllers
             targetUser.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
+            Console.WriteLine($"Admin: User {id} role updated in database to {newRole}");
+
+            // Real-time notification - Send immediately after database update
+            var userManagementService = HttpContext.RequestServices.GetRequiredService<IUserManagementService>();
+            await userManagementService.NotifyUserRoleChanged(id, newRole.ToString());
+
+            Console.WriteLine($"Admin: Role change notification sent to user {id}");
             return Ok(new { message = "Role updated successfully" });
+        }
+
+        [HttpGet("users/{id}/online-status")]
+        [RequirePermission(Permission.View)]
+        public ActionResult<bool> GetUserOnlineStatus(int id)
+        {
+            var isOnline = UserManagementHub.IsUserOnline(id);
+            return Ok(new { userId = id, isOnline = isOnline });
         }
 
         private UserRole GetCurrentUserRole()
@@ -1082,6 +1100,8 @@ namespace DreamCleaningBackend.Controllers
         [RequirePermission(Permission.Update)]
         public async Task<ActionResult> UpdateUserStatus(int id, UpdateUserStatusDto dto)
         {
+            Console.WriteLine($"Admin: Updating user {id} status to {dto.IsActive}");
+
             var targetUser = await _context.Users.FindAsync(id);
             if (targetUser == null)
                 return NotFound();
@@ -1106,6 +1126,25 @@ namespace DreamCleaningBackend.Controllers
             targetUser.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
+            Console.WriteLine($"Admin: User {id} status updated in database");
+
+            // Real-time notification
+            var userManagementService = HttpContext.RequestServices.GetRequiredService<IUserManagementService>();
+
+            if (!dto.IsActive)
+            {
+                Console.WriteLine($"Admin: Sending block notification to user {id}");
+                // User is being blocked
+                await userManagementService.NotifyUserBlocked(id, "Your account has been blocked by an administrator.");
+            }
+            else
+            {
+                Console.WriteLine($"Admin: Sending unblock notification to user {id}");
+                // User is being unblocked
+                await userManagementService.NotifyUserUnblocked(id);
+            }
+
+            Console.WriteLine($"Admin: Notification sent for user {id}");
             return Ok();
         }
 

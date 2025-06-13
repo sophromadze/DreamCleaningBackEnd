@@ -7,6 +7,7 @@ using DreamCleaningBackend.Services;
 using DreamCleaningBackend.Services.Interfaces;
 using DreamCleaningBackend.Repositories.Interfaces;
 using DreamCleaningBackend.Repositories;
+using DreamCleaningBackend.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,11 +19,14 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddAuthorization();
 
+// Add SignalR
+builder.Services.AddSignalR();
+
 // Database Configuration
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Authentication Configuration
+// Authentication Configuration - UPDATED FOR SIGNALR
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -36,6 +40,25 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero
         };
+
+        // IMPORTANT: Configure JWT for SignalR
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+
+                // If the request is for our hub...
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    (path.StartsWithSegments("/userManagementHub")))
+                {
+                    // Read the token out of the query string
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
 // Repositories
@@ -48,6 +71,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+builder.Services.AddScoped<IUserManagementService, UserManagementService>();
 
 
 // CORS Configuration
@@ -84,5 +108,11 @@ app.UseCors("AllowAngularApp");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+// ADD THIS - Map SignalR Hub
+app.MapHub<UserManagementHub>("/userManagementHub");
+
+// Add logging to see if hub is registered
+Console.WriteLine("SignalR Hub mapped to: /userManagementHub");
 
 app.Run();

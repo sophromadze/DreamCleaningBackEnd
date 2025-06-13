@@ -183,6 +183,7 @@ namespace DreamCleaningBackend.Services
                 LastName = user.LastName,
                 Email = user.Email,
                 Phone = user.Phone,
+                Role = user.Role.ToString(),
                 FirstTimeOrder = user.FirstTimeOrder,
                 SubscriptionId = user.SubscriptionId,
                 SubscriptionName = user.Subscription?.Name,

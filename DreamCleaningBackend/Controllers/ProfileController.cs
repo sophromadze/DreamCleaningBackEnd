@@ -110,7 +110,9 @@ namespace DreamCleaningBackend.Controllers
 
         private int GetUserId()
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            // Try "UserId" first (what your JWT probably uses), then fallback to NameIdentifier
+            var userIdClaim = User.FindFirst("UserId")?.Value ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
             if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
                 throw new Exception("Invalid user");
 

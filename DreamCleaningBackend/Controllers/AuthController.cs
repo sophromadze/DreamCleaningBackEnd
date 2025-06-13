@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using DreamCleaningBackend.DTOs;
 using DreamCleaningBackend.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace DreamCleaningBackend.Controllers
 {
@@ -108,6 +109,30 @@ namespace DreamCleaningBackend.Controllers
 
                 await _authService.ChangePassword(userId, changePasswordDto);
                 return Ok(new { message = "Password changed successfully" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        // 1. Update your AuthController.cs - Replace the refresh-user-token method with this:
+
+        [HttpPost("refresh-user-token")]
+        [Authorize]
+        public async Task<ActionResult<AuthResponseDto>> RefreshUserToken()
+        {
+            try
+            {
+                // Get user ID from JWT token
+                var userIdClaim = User.FindFirst("UserId")?.Value ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdClaim, out int userId))
+                {
+                    return BadRequest(new { message = "Invalid user ID" });
+                }
+
+                var response = await _authService.RefreshUserToken(userId);
+                return Ok(response);
             }
             catch (Exception ex)
             {

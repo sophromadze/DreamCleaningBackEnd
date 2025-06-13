@@ -11,6 +11,7 @@ namespace DreamCleaningBackend.Services.Interfaces
         Task<AuthResponseDto> GoogleLogin(GoogleLoginDto googleLoginDto);
         Task<AuthResponseDto> AppleLogin(AppleLoginDto appleLoginDto);
         Task<AuthResponseDto> RefreshToken(RefreshTokenDto refreshTokenDto);
+        Task<AuthResponseDto> RefreshUserToken(int userId);
         Task<bool> ChangePassword(int userId, ChangePasswordDto changePasswordDto);
     }
 }

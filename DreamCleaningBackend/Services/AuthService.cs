@@ -194,6 +194,47 @@ namespace DreamCleaningBackend.Services
             };
         }
 
+        public async Task<AuthResponseDto> RefreshUserToken(int userId)
+        {
+            // Get fresh user data from database
+            var user = await _context.Users
+                .Include(u => u.Subscription)
+                .FirstOrDefaultAsync(u => u.Id == userId);
+
+            if (user == null)
+                throw new Exception("User not found");
+
+            if (!user.IsActive)
+                throw new Exception("User account is blocked");
+
+            // Generate new token with fresh role
+            var token = CreateToken(user);
+            var refreshToken = GenerateRefreshToken();
+
+            // Update refresh token in database
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+
+            await _context.SaveChangesAsync();
+
+            return new AuthResponseDto
+            {
+                Token = token,
+                RefreshToken = refreshToken,
+                User = new UserDto
+                {
+                    Id = user.Id,
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    Email = user.Email,
+                    Phone = user.Phone,
+                    Role = user.Role.ToString(),
+                    FirstTimeOrder = user.FirstTimeOrder
+                }
+            };
+        }
+
+
         public async Task<bool> UserExists(string email)
         {
             return await _context.Users.AnyAsync(u => u.Email == email.ToLower());
