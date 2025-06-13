@@ -10,6 +10,6 @@
         public bool FirstTimeOrder { get; set; }
         public int? SubscriptionId { get; set; }
         public string? AuthProvider { get; set; }
-        public string Role { get; set; } // String representation of the role
+        public string Role { get; set; } 
     }
 }

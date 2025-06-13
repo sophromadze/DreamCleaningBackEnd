@@ -578,6 +578,101 @@ namespace DreamCleaningBackend.Services
             return true;
         }
 
+        public async Task<List<OrderListDto>> GetUserOrdersForAdmin(int userId)
+        {
+            var orders = await _context.Orders
+                .Include(o => o.ServiceType)
+                .Include(o => o.User)
+                .Where(o => o.UserId == userId)
+                .OrderByDescending(o => o.OrderDate)
+                .ToListAsync();
+
+            return orders.Select(o => new OrderListDto
+            {
+                Id = o.Id,
+                UserId = o.UserId,
+                ContactEmail = o.ContactEmail,
+                ContactFirstName = o.ContactFirstName,
+                ContactLastName = o.ContactLastName,
+                ServiceTypeName = o.ServiceType?.Name ?? "",
+                ServiceDate = o.ServiceDate,
+                ServiceTime = o.ServiceTime,
+                Status = o.Status,
+                Total = o.Total,
+                ServiceAddress = o.ServiceAddress + (string.IsNullOrEmpty(o.AptSuite) ? "" : $", {o.AptSuite}"),
+                OrderDate = o.OrderDate
+            }).ToList();
+        }
+
+        public async Task<OrderDto> GetOrderByIdForAdmin(int orderId)
+        {
+            var order = await _context.Orders
+                .Include(o => o.ServiceType)
+                .Include(o => o.Subscription)
+                .Include(o => o.OrderServices)
+                    .ThenInclude(os => os.Service)
+                .Include(o => o.OrderExtraServices)
+                    .ThenInclude(oes => oes.ExtraService)
+                .Include(o => o.User)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order == null)
+                throw new Exception("Order not found");
+
+            return new OrderDto
+            {
+                Id = order.Id,
+                UserId = order.UserId,
+                ServiceTypeId = order.ServiceTypeId,
+                ServiceTypeName = order.ServiceType?.Name ?? "",
+                ServiceDate = order.ServiceDate,
+                ServiceTime = order.ServiceTime,
+                ServiceAddress = order.ServiceAddress,
+                AptSuite = order.AptSuite,
+                City = order.City,
+                State = order.State,
+                ZipCode = order.ZipCode,
+                EntryMethod = order.EntryMethod,
+                ContactFirstName = order.ContactFirstName,
+                ContactLastName = order.ContactLastName,
+                ContactEmail = order.ContactEmail,
+                ContactPhone = order.ContactPhone,
+                SpecialInstructions = order.SpecialInstructions,
+                MaidsCount = order.MaidsCount,
+                TotalDuration = order.TotalDuration,
+                SubTotal = order.SubTotal,
+                Tax = order.Tax,
+                DiscountAmount = order.DiscountAmount,
+                SubscriptionDiscountAmount = order.SubscriptionDiscountAmount,
+                Tips = order.Tips,
+                Total = order.Total,
+                Status = order.Status,
+                OrderDate = order.OrderDate,
+                SubscriptionId = order.SubscriptionId,
+                SubscriptionName = order.Subscription?.Name,
+                Services = order.OrderServices?.Select(os => new OrderServiceDto
+                {
+                    Id = os.Id,
+                    ServiceId = os.ServiceId,
+                    ServiceName = os.Service?.Name ?? "",
+                    Quantity = os.Quantity,
+                    Cost = os.Cost,
+                    Duration = os.Duration,
+                    PriceMultiplier = os.PriceMultiplier
+                }).ToList() ?? new List<OrderServiceDto>(),
+                ExtraServices = order.OrderExtraServices?.Select(oes => new OrderExtraServiceDto
+                {
+                    Id = oes.Id,
+                    ExtraServiceId = oes.ExtraServiceId,
+                    ExtraServiceName = oes.ExtraService?.Name ?? "",
+                    Quantity = oes.Quantity,
+                    Hours = oes.Hours,
+                    Cost = oes.Cost,
+                    Duration = oes.Duration
+                }).ToList() ?? new List<OrderExtraServiceDto>()
+            };
+        }
+
         private OrderDto MapOrderToDto(Order order)
         {
             return new OrderDto

@@ -1188,7 +1188,7 @@ namespace DreamCleaningBackend.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
-        
+
         [HttpGet("orders/{orderId}")]
         [RequirePermission(Permission.View)]
         public async Task<ActionResult<OrderDto>> GetOrderDetails(int orderId)
@@ -1311,6 +1311,131 @@ namespace DreamCleaningBackend.Controllers
 
                 await _context.SaveChangesAsync();
                 return Ok(new { message = "Order cancelled successfully." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("users/{userId}/orders")]
+        [RequirePermission(Permission.View)]
+        public async Task<ActionResult<List<OrderListDto>>> GetUserOrders(int userId)
+        {
+            try
+            {
+                var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
+                if (!userExists)
+                    return NotFound(new { message = "User not found" });
+
+                var orders = await _context.Orders
+                    .Include(o => o.ServiceType)
+                    .Where(o => o.UserId == userId)
+                    .OrderByDescending(o => o.OrderDate)
+                    .Select(o => new OrderListDto
+                    {
+                        Id = o.Id,
+                        UserId = o.UserId,
+                        ContactEmail = o.ContactEmail,
+                        ContactFirstName = o.ContactFirstName,
+                        ContactLastName = o.ContactLastName,
+                        ServiceTypeName = o.ServiceType.Name,
+                        ServiceDate = o.ServiceDate,
+                        ServiceTime = o.ServiceTime,
+                        Status = o.Status,
+                        Total = o.Total,
+                        ServiceAddress = o.ServiceAddress + (string.IsNullOrEmpty(o.AptSuite) ? "" : $", {o.AptSuite}"),
+                        OrderDate = o.OrderDate
+                    })
+                    .ToListAsync();
+
+                return Ok(orders);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("users/{userId}/apartments")]
+        [RequirePermission(Permission.View)]
+        public async Task<ActionResult<List<ApartmentDto>>> GetUserApartments(int userId)
+        {
+            try
+            {
+                var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
+                if (!userExists)
+                    return NotFound(new { message = "User not found" });
+
+                var apartments = await _context.Apartments
+                    .Where(a => a.UserId == userId && a.IsActive)
+                    .OrderBy(a => a.Name)
+                    .Select(a => new ApartmentDto
+                    {
+                        Id = a.Id,
+                        Name = a.Name,
+                        Address = a.Address,
+                        AptSuite = a.AptSuite,
+                        City = a.City,
+                        State = a.State,
+                        PostalCode = a.PostalCode,
+                        SpecialInstructions = a.SpecialInstructions
+                    })
+                    .ToListAsync();
+
+                return Ok(apartments);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("users/{userId}/profile")]
+        [RequirePermission(Permission.View)]
+        public async Task<ActionResult<UserDetailDto>> GetUserProfile(int userId)
+        {
+            try
+            {
+                var user = await _context.Users
+                    .Include(u => u.Subscription)
+                    .Include(u => u.Apartments.Where(a => a.IsActive))
+                    .FirstOrDefaultAsync(u => u.Id == userId);
+
+                if (user == null)
+                    return NotFound(new { message = "User not found" });
+
+                // Calculate user statistics from Orders table
+                var userOrders = await _context.Orders
+                    .Where(o => o.UserId == userId)
+                    .ToListAsync();
+
+                var totalOrders = userOrders.Count;
+                var totalSpent = userOrders.Sum(o => o.Total);
+                var lastOrderDate = userOrders.OrderByDescending(o => o.OrderDate).FirstOrDefault()?.OrderDate;
+
+                var userDetail = new UserDetailDto
+                {
+                    Id = user.Id,
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    Email = user.Email,
+                    Phone = user.Phone,
+                    Role = user.Role.ToString(),
+                    AuthProvider = user.AuthProvider,
+                    IsActive = user.IsActive,
+                    FirstTimeOrder = user.FirstTimeOrder,
+                    SubscriptionId = user.SubscriptionId,
+                    SubscriptionName = user.Subscription?.Name,
+                    SubscriptionExpiryDate = user.SubscriptionExpiryDate,
+                    CreatedAt = user.CreatedAt,
+                    TotalOrders = totalOrders,
+                    TotalSpent = totalSpent,
+                    LastOrderDate = lastOrderDate,
+                    ApartmentCount = user.Apartments.Count
+                };
+
+                return Ok(userDetail);
             }
             catch (Exception ex)
             {

@@ -49,6 +49,7 @@ namespace DreamCleaningBackend.Models
 
         // User's apartments
         public virtual ICollection<Apartment> Apartments { get; set; } = new List<Apartment>();
+        public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
 
         // Audit fields
         public DateTime CreatedAt { get; set; }
