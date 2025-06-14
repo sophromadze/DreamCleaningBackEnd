@@ -180,7 +180,8 @@ namespace DreamCleaningBackend.Controllers
                 if (userId == 0)
                     return Unauthorized();
 
-                var amountApplied = await _giftCardService.ApplyGiftCardToOrder(dto.Code, dto.OrderAmount, dto.OrderId);
+                // Pass userId to the service
+                var amountApplied = await _giftCardService.ApplyGiftCardToOrder(dto.Code, dto.OrderAmount, dto.OrderId, userId);
                 return Ok(new { amountApplied, message = "Gift card applied successfully" });
             }
             catch (Exception ex)
@@ -318,6 +319,30 @@ namespace DreamCleaningBackend.Controllers
                 if (serviceType == null)
                     return BadRequest(new { message = "Invalid service type" });
 
+                // Determine gift card usage
+                string? giftCardCode = null;
+                decimal giftCardAmountUsed = 0;
+                string? promoCode = dto.PromoCode;
+
+                // Check if the promo code is actually a gift card
+                if (!string.IsNullOrEmpty(dto.PromoCode) &&
+                    System.Text.RegularExpressions.Regex.IsMatch(dto.PromoCode, @"^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$"))
+                {
+                    // This is a gift card
+                    giftCardCode = dto.PromoCode;
+                    promoCode = null; // Clear promo code since it's actually a gift card
+
+                    // Calculate gift card amount to be used
+                    // Note: We'll apply the actual gift card after order creation
+                    var giftCardValidation = await _giftCardService.ValidateGiftCard(giftCardCode);
+                    if (giftCardValidation.IsValid)
+                    {
+                        // Calculate the order total to determine gift card usage
+                        var orderTotal = dto.SubTotal - dto.DiscountAmount + (dto.SubTotal - dto.DiscountAmount) * 0.088m + dto.Tips;
+                        giftCardAmountUsed = Math.Min(giftCardValidation.AvailableBalance, orderTotal);
+                    }
+                }
+
                 // Create order
                 var order = new Order
                 {
@@ -339,12 +364,16 @@ namespace DreamCleaningBackend.Controllers
                     ContactEmail = dto.ContactEmail,
                     ContactPhone = dto.ContactPhone,
                     PromoCode = dto.PromoCode,
+                    GiftCardCode = dto.GiftCardCode,  
+                    GiftCardAmountUsed = dto.GiftCardAmountToUse,  
                     Tips = dto.Tips,
                     Status = "Pending",
                     OrderDate = DateTime.Now,
                     SubscriptionId = dto.SubscriptionId,
                     OrderServices = new List<OrderService>(),
-                    OrderExtraServices = new List<OrderExtraService>()
+                    OrderExtraServices = new List<OrderExtraService>(),
+                    CreatedAt = DateTime.Now,
+                    MaidsCount = dto.MaidsCount
                 };
 
                 // Calculate subtotal
@@ -599,8 +628,9 @@ namespace DreamCleaningBackend.Controllers
 
                 // Complete order calculations
                 order.SubTotal = subTotal;
-                order.Tax = (subTotal - order.DiscountAmount - order.SubscriptionDiscountAmount) * 0.088m; // 8.8% tax
-                order.Total = order.SubTotal - order.DiscountAmount - order.SubscriptionDiscountAmount + order.Tax + order.Tips;
+                order.Tax = (subTotal - order.DiscountAmount - order.SubscriptionDiscountAmount) * 0.088m;
+                var totalBeforeGiftCard = order.SubTotal - order.DiscountAmount - order.SubscriptionDiscountAmount + order.Tax + order.Tips;
+                order.Total = totalBeforeGiftCard - dto.GiftCardAmountToUse; // Subtract gift card amount
                 order.TotalDuration = totalDuration;
 
                 Console.WriteLine($"Final values saved to DB:");
@@ -609,6 +639,8 @@ namespace DreamCleaningBackend.Controllers
                 Console.WriteLine($"- SubscriptionDiscountAmount: ${order.SubscriptionDiscountAmount}");
                 Console.WriteLine($"- Tax: ${order.Tax}");
                 Console.WriteLine($"- Tips: ${order.Tips}");
+                Console.WriteLine($"- GiftCardCode: {order.GiftCardCode}");
+                Console.WriteLine($"- GiftCardAmountUsed: ${order.GiftCardAmountUsed}");
                 Console.WriteLine($"- Total: ${order.Total}");
                 Console.WriteLine($"- Total Duration: {order.TotalDuration} minutes");
                 Console.WriteLine($"- Maids Count: {order.MaidsCount}");
@@ -617,6 +649,27 @@ namespace DreamCleaningBackend.Controllers
                 // Add order to database
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
+
+                // Apply gift card AFTER order is saved (so we have the order ID)
+                if (!string.IsNullOrEmpty(giftCardCode) && giftCardAmountUsed > 0)
+                {
+                    try
+                    {
+                        Console.WriteLine($"=== APPLYING GIFT CARD ===");
+                        Console.WriteLine($"Code: {dto.GiftCardCode}");
+                        Console.WriteLine($"Amount: {dto.GiftCardAmountToUse}");
+                        Console.WriteLine($"OrderId: {order.Id}");
+                        Console.WriteLine($"UserId: {userId}");
+                        // Pass the userId to track who used the gift card
+                        await _giftCardService.ApplyGiftCardToOrder(giftCardCode, totalBeforeGiftCard, order.Id, userId);
+                        Console.WriteLine("Gift card applied successfully!");
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log the error but don't fail the order creation
+                        Console.WriteLine($"Error applying gift card: {ex.Message}");
+                    }
+                }
 
                 // Handle subscription activation/renewal
                 if (subscription != null && subscription.SubscriptionDays > 0)

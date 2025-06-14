@@ -55,7 +55,7 @@ namespace DreamCleaningBackend.Data
             // Order configuration
             modelBuilder.Entity<Order>()
                 .HasOne(o => o.User)
-                .WithMany()
+                .WithMany(u => u.Orders)
                 .HasForeignKey(o => o.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
@@ -238,10 +238,7 @@ namespace DreamCleaningBackend.Data
                     .HasForeignKey(e => e.PurchasedByUserId)
                     .OnDelete(DeleteBehavior.Restrict);
 
-                entity.HasOne(e => e.UsedByUser)
-                    .WithMany()
-                    .HasForeignKey(e => e.UsedByUserId)
-                    .OnDelete(DeleteBehavior.Restrict);
+                // REMOVED: UsedByUser relationship
             });
 
             // Gift Card Usage configurations
@@ -269,6 +266,12 @@ namespace DreamCleaningBackend.Data
                 entity.HasOne(e => e.Order)
                     .WithMany()
                     .HasForeignKey(e => e.OrderId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                // ADD: User relationship
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
 

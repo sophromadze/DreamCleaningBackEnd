@@ -40,11 +40,9 @@ namespace DreamCleaningBackend.Models
         public string? Message { get; set; }
 
         public bool IsActive { get; set; } = true;
-        public bool IsUsed { get; set; } = false;
 
         // Foreign keys
         public int PurchasedByUserId { get; set; }
-        public int? UsedByUserId { get; set; }
 
         // Payment tracking
         [StringLength(100)]
@@ -55,12 +53,18 @@ namespace DreamCleaningBackend.Models
         // Timestamps
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
-        public DateTime? UsedAt { get; set; }
 
         // Navigation properties
         public virtual User PurchasedByUser { get; set; }
-        public virtual User? UsedByUser { get; set; }
         public virtual ICollection<GiftCardUsage> GiftCardUsages { get; set; } = new List<GiftCardUsage>();
+
+        // Computed property to check if fully used
+        [NotMapped]
+        public bool IsFullyUsed => CurrentBalance <= 0;
+
+        // Computed property for total amount used
+        [NotMapped]
+        public decimal TotalAmountUsed => OriginalAmount - CurrentBalance;
     }
 
     public class GiftCardUsage
@@ -70,6 +74,7 @@ namespace DreamCleaningBackend.Models
 
         public int GiftCardId { get; set; }
         public int OrderId { get; set; }
+        public int UserId { get; set; } // ADD: Track who used it
 
         [Required]
         [Column(TypeName = "decimal(10,2)")]
@@ -84,5 +89,6 @@ namespace DreamCleaningBackend.Models
         // Navigation properties
         public virtual GiftCard GiftCard { get; set; }
         public virtual Order Order { get; set; }
+        public virtual User User { get; set; } // ADD: Navigation to user
     }
 }

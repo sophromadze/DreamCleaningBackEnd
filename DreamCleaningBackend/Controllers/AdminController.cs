@@ -7,6 +7,7 @@ using DreamCleaningBackend.Models;
 using DreamCleaningBackend.Services.Interfaces;
 using DreamCleaningBackend.Attributes;
 using DreamCleaningBackend.Hubs;
+using DreamCleaningBackend.Services;
 
 namespace DreamCleaningBackend.Controllers
 {
@@ -18,12 +19,14 @@ namespace DreamCleaningBackend.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IPermissionService _permissionService;
         private readonly IOrderService _orderService;
+        private readonly IGiftCardService _giftCardService;
 
-        public AdminController(ApplicationDbContext context, IPermissionService permissionService, IOrderService orderService)
+        public AdminController(ApplicationDbContext context, IPermissionService permissionService, IOrderService orderService, IGiftCardService giftCardService)
         {
             _context = context;
             _permissionService = permissionService;
             _orderService = orderService;
+            _giftCardService = giftCardService;
         }
 
         // Service Types Management
@@ -1436,6 +1439,123 @@ namespace DreamCleaningBackend.Controllers
                 };
 
                 return Ok(userDetail);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("gift-cards")]
+        [RequirePermission(Permission.View)]
+        public async Task<ActionResult<List<GiftCardAdminDto>>> GetAllGiftCards()
+        {
+            try
+            {
+                var giftCards = await _giftCardService.GetAllGiftCardsForAdmin();
+                return Ok(giftCards);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("gift-cards/{id}")]
+        [RequirePermission(Permission.View)]
+        public async Task<ActionResult<GiftCardAdminDto>> GetGiftCardDetails(int id)
+        {
+            try
+            {
+                var giftCard = await _context.GiftCards
+                    .Include(g => g.PurchasedByUser)
+                    .Include(g => g.GiftCardUsages)
+                        .ThenInclude(u => u.User)
+                    .Include(g => g.GiftCardUsages)
+                        .ThenInclude(u => u.Order)
+                    .FirstOrDefaultAsync(g => g.Id == id);
+
+                if (giftCard == null)
+                    return NotFound(new { message = "Gift card not found" });
+
+                var dto = new GiftCardAdminDto
+                {
+                    Id = giftCard.Id,
+                    Code = giftCard.Code,
+                    OriginalAmount = giftCard.OriginalAmount,
+                    CurrentBalance = giftCard.CurrentBalance,
+                    RecipientName = giftCard.RecipientName,
+                    RecipientEmail = giftCard.RecipientEmail,
+                    SenderName = giftCard.SenderName,
+                    SenderEmail = giftCard.SenderEmail,
+                    Message = giftCard.Message,
+                    IsActive = giftCard.IsActive,
+                    IsPaid = giftCard.IsPaid,
+                    CreatedAt = giftCard.CreatedAt,
+                    PaidAt = giftCard.PaidAt,
+                    PurchasedByUserName = giftCard.PurchasedByUser.FirstName + " " + giftCard.PurchasedByUser.LastName,
+                    TotalAmountUsed = giftCard.OriginalAmount - giftCard.CurrentBalance,
+                    TimesUsed = giftCard.GiftCardUsages.Count,
+                    LastUsedAt = giftCard.GiftCardUsages.OrderByDescending(u => u.UsedAt).FirstOrDefault()?.UsedAt,
+                    Usages = giftCard.GiftCardUsages.Select(u => new GiftCardUsageDto
+                    {
+                        Id = u.Id,
+                        AmountUsed = u.AmountUsed,
+                        BalanceAfterUsage = u.BalanceAfterUsage,
+                        UsedAt = u.UsedAt,
+                        OrderReference = $"Order #{u.OrderId} - ${u.Order.Total:F2}",
+                        UsedByName = u.User.FirstName + " " + u.User.LastName,
+                        UsedByEmail = u.User.Email
+                    }).ToList()
+                };
+
+                return Ok(dto);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("gift-cards/{id}/deactivate")]
+        [RequirePermission(Permission.Deactivate)]
+        public async Task<ActionResult> DeactivateGiftCard(int id)
+        {
+            try
+            {
+                var giftCard = await _context.GiftCards.FindAsync(id);
+                if (giftCard == null)
+                    return NotFound(new { message = "Gift card not found" });
+
+                giftCard.IsActive = false;
+                giftCard.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = "Gift card deactivated successfully" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("gift-cards/{id}/activate")]
+        [RequirePermission(Permission.Update)]
+        public async Task<ActionResult> ActivateGiftCard(int id)
+        {
+            try
+            {
+                var giftCard = await _context.GiftCards.FindAsync(id);
+                if (giftCard == null)
+                    return NotFound(new { message = "Gift card not found" });
+
+                giftCard.IsActive = true;
+                giftCard.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = "Gift card activated successfully" });
             }
             catch (Exception ex)
             {

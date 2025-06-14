@@ -57,6 +57,8 @@ namespace DreamCleaningBackend.DTOs
         public int? ApartmentId { get; set; }
         public string? ApartmentName { get; set; }
         public string? PromoCode { get; set; }
+        public string? GiftCardCode { get; set; }
+        public decimal GiftCardAmountToUse { get; set; }
 
         [Range(0, double.MaxValue)]
         public decimal Tips { get; set; }

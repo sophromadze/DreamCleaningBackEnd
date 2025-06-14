@@ -82,6 +82,8 @@ namespace DreamCleaningBackend.DTOs
         public decimal BalanceAfterUsage { get; set; }
         public DateTime UsedAt { get; set; }
         public string OrderReference { get; set; }
+        public string UsedByName { get; set; }
+        public string UsedByEmail { get; set; }
     }
 
     public class ApplyGiftCardToOrderDto

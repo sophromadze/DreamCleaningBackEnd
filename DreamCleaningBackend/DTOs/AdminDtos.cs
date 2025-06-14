@@ -274,6 +274,33 @@ namespace DreamCleaningBackend.DTOs
         public bool IsActive { get; set; }
     }
 
+    public class GiftCardAdminDto
+    {
+        public int Id { get; set; }
+        public string Code { get; set; }
+        public decimal OriginalAmount { get; set; }
+        public decimal CurrentBalance { get; set; }
+        public string RecipientName { get; set; }
+        public string RecipientEmail { get; set; }
+        public string SenderName { get; set; }
+        public string SenderEmail { get; set; }
+        public string? Message { get; set; }
+        public bool IsActive { get; set; }
+        public bool IsPaid { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime? PaidAt { get; set; }
+        public string PurchasedByUserName { get; set; }
+
+        // Calculated fields
+        public decimal TotalAmountUsed { get; set; }
+        public int TimesUsed { get; set; }
+        public DateTime? LastUsedAt { get; set; }
+        public bool IsFullyUsed => CurrentBalance <= 0;
+
+        // Usage history
+        public List<GiftCardUsageDto> Usages { get; set; } = new List<GiftCardUsageDto>();
+    }
+
     // User Management DTOs
     public class UserAdminDto
     {
