@@ -60,6 +60,12 @@ namespace DreamCleaningBackend.Models
         [StringLength(50)]
         public string? PromoCode { get; set; }
 
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal GiftCardAmountUsed { get; set; } = 0;
+
+        [StringLength(14)]
+        public string? GiftCardCode { get; set; }
+
         // Subscription
         public int SubscriptionId { get; set; }
         public virtual Subscription Subscription { get; set; }

@@ -22,6 +22,8 @@ namespace DreamCleaningBackend.Data
         public DbSet<OrderService> OrderServices { get; set; }
         public DbSet<OrderExtraService> OrderExtraServices { get; set; }
         public DbSet<PromoCode> PromoCodes { get; set; }
+        public DbSet<GiftCard> GiftCards { get; set; }
+        public DbSet<GiftCardUsage> GiftCardUsages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -184,6 +186,104 @@ namespace DreamCleaningBackend.Data
                     CreatedAt = DateTime.UtcNow
                 }
             );
+
+            // Gift Card configurations
+            modelBuilder.Entity<GiftCard>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.Code)
+                    .IsRequired()
+                    .HasMaxLength(14);
+
+                entity.HasIndex(e => e.Code)
+                    .IsUnique();
+
+                entity.Property(e => e.OriginalAmount)
+                    .HasColumnType("decimal(10,2)")
+                    .IsRequired();
+
+                entity.Property(e => e.CurrentBalance)
+                    .HasColumnType("decimal(10,2)")
+                    .IsRequired();
+
+                entity.Property(e => e.RecipientName)
+                    .IsRequired()
+                    .HasMaxLength(100);
+
+                entity.Property(e => e.RecipientEmail)
+                    .IsRequired()
+                    .HasMaxLength(255);
+
+                entity.Property(e => e.SenderName)
+                    .IsRequired()
+                    .HasMaxLength(100);
+
+                entity.Property(e => e.SenderEmail)
+                    .IsRequired()
+                    .HasMaxLength(255);
+
+                entity.Property(e => e.Message)
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.PaymentIntentId)
+                    .HasMaxLength(100);
+
+                entity.Property(e => e.CreatedAt)
+                    .HasDefaultValueSql("GETUTCDATE()");
+
+                // Foreign key relationships
+                entity.HasOne(e => e.PurchasedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.PurchasedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.UsedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.UsedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // Gift Card Usage configurations
+            modelBuilder.Entity<GiftCardUsage>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.AmountUsed)
+                    .HasColumnType("decimal(10,2)")
+                    .IsRequired();
+
+                entity.Property(e => e.BalanceAfterUsage)
+                    .HasColumnType("decimal(10,2)")
+                    .IsRequired();
+
+                entity.Property(e => e.UsedAt)
+                    .HasDefaultValueSql("GETUTCDATE()");
+
+                // Foreign key relationships
+                entity.HasOne(e => e.GiftCard)
+                    .WithMany(g => g.GiftCardUsages)
+                    .HasForeignKey(e => e.GiftCardId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Order)
+                    .WithMany()
+                    .HasForeignKey(e => e.OrderId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // Update Order entity for gift card tracking
+            modelBuilder.Entity<Order>(entity =>
+            {
+                // ... existing configurations ...
+
+                entity.Property(e => e.GiftCardAmountUsed)
+                    .HasColumnType("decimal(10,2)")
+                    .HasDefaultValue(0);
+
+                entity.Property(e => e.GiftCardCode)
+                    .HasMaxLength(14);
+            });
 
             // Seed Services for Residential Cleaning
             modelBuilder.Entity<Service>().HasData(

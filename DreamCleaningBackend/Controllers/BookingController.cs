@@ -16,12 +16,14 @@ namespace DreamCleaningBackend.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly ISubscriptionService _subscriptionService;
+        private readonly IGiftCardService _giftCardService;
 
-        public BookingController(ApplicationDbContext context, IConfiguration configuration, ISubscriptionService subscriptionService)
+        public BookingController(ApplicationDbContext context, IConfiguration configuration, ISubscriptionService subscriptionService, IGiftCardService giftCardService)
         {
             _context = context;
             _configuration = configuration;
             _subscriptionService = subscriptionService;
+            _giftCardService = giftCardService;
         }
 
         [HttpGet("service-types")]
@@ -168,58 +170,103 @@ namespace DreamCleaningBackend.Controllers
             });
         }
 
+        [HttpPost("apply-gift-card")]
+        [Authorize]
+        public async Task<ActionResult> ApplyGiftCard(ApplyGiftCardToOrderDto dto)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                if (userId == 0)
+                    return Unauthorized();
+
+                var amountApplied = await _giftCardService.ApplyGiftCardToOrder(dto.Code, dto.OrderAmount, dto.OrderId);
+                return Ok(new { amountApplied, message = "Gift card applied successfully" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
 
         [HttpPost("validate-promo")]
         public async Task<ActionResult<PromoCodeValidationDto>> ValidatePromoCode(ValidatePromoCodeDto dto)
         {
-            var promoCode = await _context.PromoCodes
-                .FirstOrDefaultAsync(p => p.Code.ToLower() == dto.Code.ToLower() && p.IsActive);
-
-            if (promoCode == null)
+            try
             {
-                return Ok(new PromoCodeValidationDto
+                // Check if it's a gift card format (XXXX-XXXX-XXXX)
+                if (System.Text.RegularExpressions.Regex.IsMatch(dto.Code, @"^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$"))
                 {
-                    IsValid = false,
-                    Message = "Invalid promo code"
-                });
-            }
-
-            // Check validity dates
-            if (promoCode.ValidFrom.HasValue && promoCode.ValidFrom.Value > DateTime.UtcNow)
-            {
-                return Ok(new PromoCodeValidationDto
+                    // Handle as gift card
+                    var giftCardValidation = await _giftCardService.ValidateGiftCard(dto.Code);
+                    return Ok(new PromoCodeValidationDto
+                    {
+                        IsValid = giftCardValidation.IsValid,
+                        DiscountValue = giftCardValidation.AvailableBalance,
+                        IsPercentage = false,
+                        IsGiftCard = true,
+                        AvailableBalance = giftCardValidation.AvailableBalance,
+                        Message = giftCardValidation.Message
+                    });
+                }
+                else
                 {
-                    IsValid = false,
-                    Message = "Promo code is not yet valid"
-                });
-            }
+                    // Handle as regular promo code - YOUR EXISTING LOGIC
+                    var promoCode = await _context.PromoCodes
+                        .FirstOrDefaultAsync(p => p.Code.ToLower() == dto.Code.ToLower() && p.IsActive);
 
-            if (promoCode.ValidTo.HasValue && promoCode.ValidTo.Value < DateTime.UtcNow)
-            {
-                return Ok(new PromoCodeValidationDto
-                {
-                    IsValid = false,
-                    Message = "Promo code has expired"
-                });
-            }
+                    if (promoCode == null)
+                    {
+                        return Ok(new PromoCodeValidationDto
+                        {
+                            IsValid = false,
+                            Message = "Invalid promo code"
+                        });
+                    }
 
-            // Check usage limits
-            if (promoCode.MaxUsageCount.HasValue && promoCode.CurrentUsageCount >= promoCode.MaxUsageCount.Value)
-            {
-                return Ok(new PromoCodeValidationDto
-                {
-                    IsValid = false,
-                    Message = "Promo code usage limit reached"
-                });
-            }
+                    // Check validity dates - YOUR EXISTING LOGIC
+                    if (promoCode.ValidFrom.HasValue && promoCode.ValidFrom.Value > DateTime.UtcNow)
+                    {
+                        return Ok(new PromoCodeValidationDto
+                        {
+                            IsValid = false,
+                            Message = "Promo code is not yet valid"
+                        });
+                    }
 
-            return Ok(new PromoCodeValidationDto
+                    if (promoCode.ValidTo.HasValue && promoCode.ValidTo.Value < DateTime.UtcNow)
+                    {
+                        return Ok(new PromoCodeValidationDto
+                        {
+                            IsValid = false,
+                            Message = "Promo code has expired"
+                        });
+                    }
+
+                    // Check usage limits - YOUR EXISTING LOGIC
+                    if (promoCode.MaxUsageCount.HasValue && promoCode.CurrentUsageCount >= promoCode.MaxUsageCount.Value)
+                    {
+                        return Ok(new PromoCodeValidationDto
+                        {
+                            IsValid = false,
+                            Message = "Promo code usage limit reached"
+                        });
+                    }
+
+                    return Ok(new PromoCodeValidationDto
+                    {
+                        IsValid = true,
+                        DiscountValue = promoCode.DiscountValue,
+                        IsPercentage = promoCode.IsPercentage,
+                        IsGiftCard = false // This is a regular promo code
+                    });
+                }
+            }
+            catch (Exception ex)
             {
-                IsValid = true,
-                DiscountValue = promoCode.DiscountValue,
-                IsPercentage = promoCode.IsPercentage
-            });
-        }
+                return BadRequest(new { message = "Failed to validate code: " + ex.Message });
+            }
+        }  
 
         [HttpPost("calculate")]
         public async Task<ActionResult<BookingCalculationDto>> CalculateBooking(CreateBookingDto dto)
