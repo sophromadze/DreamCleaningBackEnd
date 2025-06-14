@@ -320,27 +320,28 @@ namespace DreamCleaningBackend.Controllers
                     return BadRequest(new { message = "Invalid service type" });
 
                 // Determine gift card usage
-                string? giftCardCode = null;
-                decimal giftCardAmountUsed = 0;
+                string? giftCardCode = dto.GiftCardCode; // Use the actual GiftCardCode field
+                decimal giftCardAmountUsed = dto.GiftCardAmountToUse; // Use the amount from DTO
                 string? promoCode = dto.PromoCode;
 
                 // Check if the promo code is actually a gift card
                 if (!string.IsNullOrEmpty(dto.PromoCode) &&
+                    string.IsNullOrEmpty(dto.GiftCardCode) &&
                     System.Text.RegularExpressions.Regex.IsMatch(dto.PromoCode, @"^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$"))
                 {
                     // This is a gift card
                     giftCardCode = dto.PromoCode;
-                    promoCode = null; // Clear promo code since it's actually a gift card
+                    promoCode = null;
 
-                    // Calculate gift card amount to be used
-                    // Note: We'll apply the actual gift card after order creation
-                    var giftCardValidation = await _giftCardService.ValidateGiftCard(giftCardCode);
-                    if (giftCardValidation.IsValid)
-                    {
-                        // Calculate the order total to determine gift card usage
-                        var orderTotal = dto.SubTotal - dto.DiscountAmount + (dto.SubTotal - dto.DiscountAmount) * 0.088m + dto.Tips;
-                        giftCardAmountUsed = Math.Min(giftCardValidation.AvailableBalance, orderTotal);
-                    }
+                    //// Calculate gift card amount to be used
+                    //// Note: We'll apply the actual gift card after order creation
+                    //var giftCardValidation = await _giftCardService.ValidateGiftCard(giftCardCode);
+                    //if (giftCardValidation.IsValid)
+                    //{
+                    //    // Calculate the order total to determine gift card usage
+                    //    var orderTotal = dto.SubTotal - dto.DiscountAmount + (dto.SubTotal - dto.DiscountAmount) * 0.088m + dto.Tips;
+                    //    giftCardAmountUsed = Math.Min(giftCardValidation.AvailableBalance, orderTotal);
+                    //}
                 }
 
                 // Create order
@@ -363,9 +364,9 @@ namespace DreamCleaningBackend.Controllers
                     ContactLastName = dto.ContactLastName,
                     ContactEmail = dto.ContactEmail,
                     ContactPhone = dto.ContactPhone,
-                    PromoCode = dto.PromoCode,
-                    GiftCardCode = dto.GiftCardCode,  
-                    GiftCardAmountUsed = dto.GiftCardAmountToUse,  
+                    PromoCode = promoCode,  // Set to null if it's a gift card
+                    GiftCardCode = giftCardCode,
+                    GiftCardAmountUsed = 0,  // Set to 0 initially, will update after actual application
                     Tips = dto.Tips,
                     Status = "Pending",
                     OrderDate = DateTime.Now,
@@ -595,7 +596,6 @@ namespace DreamCleaningBackend.Controllers
                 //// Apply subscription discount
                 var subscription = await _context.Subscriptions.FindAsync(dto.SubscriptionId);
 
-
                 // Set MaidsCount from the frontend
                 order.MaidsCount = dto.MaidsCount;
 
@@ -622,7 +622,6 @@ namespace DreamCleaningBackend.Controllers
                     }
                 }
 
-               
                 order.DiscountAmount = dto.DiscountAmount; // This is promo/first-time discount ONLY
                 order.SubscriptionDiscountAmount = dto.SubscriptionDiscountAmount; // Add this line if property exists
 
@@ -630,7 +629,7 @@ namespace DreamCleaningBackend.Controllers
                 order.SubTotal = subTotal;
                 order.Tax = (subTotal - order.DiscountAmount - order.SubscriptionDiscountAmount) * 0.088m;
                 var totalBeforeGiftCard = order.SubTotal - order.DiscountAmount - order.SubscriptionDiscountAmount + order.Tax + order.Tips;
-                order.Total = totalBeforeGiftCard - dto.GiftCardAmountToUse; // Subtract gift card amount
+                order.Total = totalBeforeGiftCard - giftCardAmountUsed; // Subtract gift card amount
                 order.TotalDuration = totalDuration;
 
                 Console.WriteLine($"Final values saved to DB:");
@@ -646,28 +645,63 @@ namespace DreamCleaningBackend.Controllers
                 Console.WriteLine($"- Maids Count: {order.MaidsCount}");
                 Console.WriteLine($"=== BOOKING CREATION END ===\n");
 
-                // Add order to database
-                _context.Orders.Add(order);
-                await _context.SaveChangesAsync();
+                // REMOVED: This line was causing the duplicate save issue
+                // _context.Orders.Add(order);
+                // await _context.SaveChangesAsync();
 
-                // Apply gift card AFTER order is saved (so we have the order ID)
-                if (!string.IsNullOrEmpty(giftCardCode) && giftCardAmountUsed > 0)
+                // Use a transaction to ensure both order and gift card usage are saved together
+                using (var transaction = await _context.Database.BeginTransactionAsync())
                 {
                     try
                     {
-                        Console.WriteLine($"=== APPLYING GIFT CARD ===");
-                        Console.WriteLine($"Code: {dto.GiftCardCode}");
-                        Console.WriteLine($"Amount: {dto.GiftCardAmountToUse}");
-                        Console.WriteLine($"OrderId: {order.Id}");
-                        Console.WriteLine($"UserId: {userId}");
-                        // Pass the userId to track who used the gift card
-                        await _giftCardService.ApplyGiftCardToOrder(giftCardCode, totalBeforeGiftCard, order.Id, userId);
-                        Console.WriteLine("Gift card applied successfully!");
+                        // Add order to database
+                        _context.Orders.Add(order);
+                        await _context.SaveChangesAsync();
+
+                        // Apply gift card if one was provided
+                        if (!string.IsNullOrEmpty(giftCardCode) && giftCardAmountUsed > 0)
+                        {
+                            Console.WriteLine($"=== APPLYING GIFT CARD ===");
+                            Console.WriteLine($"Code: {giftCardCode}");
+                            Console.WriteLine($"Amount to use: {giftCardAmountUsed}");
+                            Console.WriteLine($"OrderId: {order.Id}");
+                            Console.WriteLine($"UserId: {userId}");
+
+                            // Apply the gift card and get the actual amount used
+                            var actualAmountUsed = await _giftCardService.ApplyGiftCardToOrder(
+                                giftCardCode,
+                                totalBeforeGiftCard,
+                                order.Id,
+                                userId
+                            );
+
+                            // Update the order if the actual amount differs
+                            if (actualAmountUsed != giftCardAmountUsed)
+                            {
+                                order.GiftCardAmountUsed = actualAmountUsed;
+                                order.Total = totalBeforeGiftCard - actualAmountUsed;
+                                await _context.SaveChangesAsync();
+                            }
+                            else
+                            {
+                                // Even if amounts match, update the order to set the actual amount used
+                                order.GiftCardAmountUsed = actualAmountUsed;
+                                await _context.SaveChangesAsync();
+                            }
+
+                            Console.WriteLine($"Gift card applied successfully! Actual amount used: {actualAmountUsed}");
+                        }
+
+                        // Commit the transaction
+                        await transaction.CommitAsync();
+                        Console.WriteLine("Transaction committed successfully!");
                     }
                     catch (Exception ex)
                     {
-                        // Log the error but don't fail the order creation
-                        Console.WriteLine($"Error applying gift card: {ex.Message}");
+                        // Rollback on any error
+                        await transaction.RollbackAsync();
+                        Console.WriteLine($"Transaction rolled back due to error: {ex.Message}");
+                        throw new InvalidOperationException($"Failed to create order: {ex.Message}");
                     }
                 }
 
