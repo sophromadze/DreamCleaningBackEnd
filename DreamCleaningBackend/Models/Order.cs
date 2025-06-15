@@ -33,6 +33,9 @@ namespace DreamCleaningBackend.Models
 
         public TimeSpan ServiceTime { get; set; }
 
+        [StringLength(500)]
+        public string? CancellationReason { get; set; }
+
         // Duration in minutes
         public int TotalDuration { get; set; }
 

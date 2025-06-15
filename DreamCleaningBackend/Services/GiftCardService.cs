@@ -10,10 +10,12 @@ namespace DreamCleaningBackend.Services
     public class GiftCardService : IGiftCardService
     {
         private readonly ApplicationDbContext _context;
+        private readonly IAuditService _auditService;
 
-        public GiftCardService(ApplicationDbContext context)
+        public GiftCardService(ApplicationDbContext context, IAuditService auditService)
         {
             _context = context;
+            _auditService = auditService;
         }
 
         public string GenerateUniqueGiftCardCode()
@@ -67,6 +69,9 @@ namespace DreamCleaningBackend.Services
 
             _context.GiftCards.Add(giftCard);
             await _context.SaveChangesAsync();
+
+            // ADD THIS: LOG THE CREATION
+            await _auditService.LogCreateAsync(giftCard);
 
             return giftCard;
         }
@@ -134,7 +139,22 @@ namespace DreamCleaningBackend.Services
                 throw new InvalidOperationException("Invalid or unusable gift card");
             }
 
-            // Calculate the amount to apply (minimum of gift card balance and order amount)
+            // CREATE A COPY FOR AUDITING
+            var originalGiftCard = new GiftCard
+            {
+                Id = giftCard.Id,
+                Code = giftCard.Code,
+                OriginalAmount = giftCard.OriginalAmount,
+                CurrentBalance = giftCard.CurrentBalance,
+                RecipientName = giftCard.RecipientName,
+                RecipientEmail = giftCard.RecipientEmail,
+                SenderName = giftCard.SenderName,
+                SenderEmail = giftCard.SenderEmail,
+                IsActive = giftCard.IsActive,
+                IsPaid = giftCard.IsPaid
+            };
+
+            // Calculate the amount to apply
             var amountToApply = Math.Min(giftCard.CurrentBalance, orderAmount);
 
             Console.WriteLine($"=== GIFT CARD SERVICE DEBUG ===");
@@ -146,12 +166,18 @@ namespace DreamCleaningBackend.Services
             giftCard.CurrentBalance -= amountToApply;
             giftCard.UpdatedAt = DateTime.UtcNow;
 
-            // Create usage record with UserId
+            // Save gift card changes first
+            await _context.SaveChangesAsync();
+
+            // Log the gift card update AFTER saving
+            await _auditService.LogUpdateAsync(originalGiftCard, giftCard);
+
+            // Create usage record
             var usage = new GiftCardUsage
             {
                 GiftCardId = giftCard.Id,
                 OrderId = orderId,
-                UserId = userId,  // NOW we track who used it
+                UserId = userId,
                 AmountUsed = amountToApply,
                 BalanceAfterUsage = giftCard.CurrentBalance,
                 UsedAt = DateTime.UtcNow
@@ -159,6 +185,21 @@ namespace DreamCleaningBackend.Services
 
             _context.GiftCardUsages.Add(usage);
             await _context.SaveChangesAsync();
+
+            // Create a simple usage object for logging (without navigation properties)
+            var usageForLogging = new GiftCardUsage
+            {
+                Id = usage.Id,
+                GiftCardId = usage.GiftCardId,
+                OrderId = usage.OrderId,
+                UserId = usage.UserId,
+                AmountUsed = usage.AmountUsed,
+                BalanceAfterUsage = usage.BalanceAfterUsage,
+                UsedAt = usage.UsedAt
+            };
+
+            // Log the usage creation
+            await _auditService.LogCreateAsync(usageForLogging);
 
             Console.WriteLine($"New Gift Card Balance: {giftCard.CurrentBalance}");
             Console.WriteLine("Gift card usage recorded successfully!");
@@ -284,10 +325,24 @@ namespace DreamCleaningBackend.Services
             var giftCard = await _context.GiftCards.FindAsync(giftCardId);
             if (giftCard == null) return false;
 
+            // ADD THIS: CREATE A COPY FOR AUDITING
+            var originalGiftCard = new GiftCard
+            {
+                Id = giftCard.Id,
+                Code = giftCard.Code,
+                IsPaid = giftCard.IsPaid,
+                PaidAt = giftCard.PaidAt,
+                PaymentIntentId = giftCard.PaymentIntentId,
+                CurrentBalance = giftCard.CurrentBalance
+            };
+
             giftCard.IsPaid = true;
             giftCard.PaidAt = DateTime.UtcNow;
             giftCard.PaymentIntentId = paymentIntentId;
             giftCard.UpdatedAt = DateTime.UtcNow;
+
+            // ADD THIS: LOG THE UPDATE
+            await _auditService.LogUpdateAsync(originalGiftCard, giftCard);
 
             await _context.SaveChangesAsync();
             return true;

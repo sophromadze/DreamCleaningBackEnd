@@ -8,6 +8,7 @@ using DreamCleaningBackend.Services.Interfaces;
 using DreamCleaningBackend.Attributes;
 using DreamCleaningBackend.Hubs;
 using DreamCleaningBackend.Services;
+using Newtonsoft.Json;
 
 namespace DreamCleaningBackend.Controllers
 {
@@ -20,13 +21,19 @@ namespace DreamCleaningBackend.Controllers
         private readonly IPermissionService _permissionService;
         private readonly IOrderService _orderService;
         private readonly IGiftCardService _giftCardService;
+        private readonly IAuditService _auditService;
 
-        public AdminController(ApplicationDbContext context, IPermissionService permissionService, IOrderService orderService, IGiftCardService giftCardService)
+        public AdminController(ApplicationDbContext context, 
+            IPermissionService permissionService, 
+            IOrderService orderService, 
+            IGiftCardService giftCardService, 
+            IAuditService auditService)
         {
             _context = context;
             _permissionService = permissionService;
             _orderService = orderService;
             _giftCardService = giftCardService;
+            _auditService = auditService;
         }
 
         // Service Types Management
@@ -143,6 +150,9 @@ namespace DreamCleaningBackend.Controllers
             _context.ServiceTypes.Add(serviceType);
             await _context.SaveChangesAsync();
 
+            // LOG THE CREATION (after save to get the ID)
+            await _auditService.LogCreateAsync(serviceType);
+
             return Ok(new ServiceTypeDto
             {
                 Id = serviceType.Id,
@@ -161,11 +171,25 @@ namespace DreamCleaningBackend.Controllers
             if (serviceType == null)
                 return NotFound();
 
+            // CREATE A COPY FOR AUDITING
+            var originalServiceType = new ServiceType
+            {
+                Id = serviceType.Id,
+                Name = serviceType.Name,
+                BasePrice = serviceType.BasePrice,
+                Description = serviceType.Description,
+                DisplayOrder = serviceType.DisplayOrder,
+                IsActive = serviceType.IsActive
+            };
+
             serviceType.Name = dto.Name;
             serviceType.BasePrice = dto.BasePrice;
             serviceType.Description = dto.Description;
             serviceType.DisplayOrder = dto.DisplayOrder;
             serviceType.UpdatedAt = DateTime.UtcNow;
+
+            // LOG THE UPDATE
+            await _auditService.LogUpdateAsync(originalServiceType, serviceType);
 
             await _context.SaveChangesAsync();
 
@@ -187,8 +211,23 @@ namespace DreamCleaningBackend.Controllers
             if (serviceType == null)
                 return NotFound();
 
+            // CREATE A COPY FOR AUDITING
+            var originalServiceType = new ServiceType
+            {
+                Id = serviceType.Id,
+                Name = serviceType.Name,
+                BasePrice = serviceType.BasePrice,
+                Description = serviceType.Description,
+                DisplayOrder = serviceType.DisplayOrder,
+                IsActive = serviceType.IsActive  // This will be true
+            };
+
             serviceType.IsActive = false;
             serviceType.UpdatedAt = DateTime.UtcNow;
+
+            // LOG THE UPDATE (deactivation is an update)
+            await _auditService.LogUpdateAsync(originalServiceType, serviceType);
+
             await _context.SaveChangesAsync();
 
             return Ok();
@@ -202,8 +241,23 @@ namespace DreamCleaningBackend.Controllers
             if (serviceType == null)
                 return NotFound();
 
+            // CREATE A COPY FOR AUDITING
+            var originalServiceType = new ServiceType
+            {
+                Id = serviceType.Id,
+                Name = serviceType.Name,
+                BasePrice = serviceType.BasePrice,
+                Description = serviceType.Description,
+                DisplayOrder = serviceType.DisplayOrder,
+                IsActive = serviceType.IsActive  // This will be false
+            };
+
             serviceType.IsActive = true;
             serviceType.UpdatedAt = DateTime.UtcNow;
+
+            // LOG THE UPDATE (activation is an update)
+            await _auditService.LogUpdateAsync(originalServiceType, serviceType);
+
             await _context.SaveChangesAsync();
 
             return Ok();
@@ -222,12 +276,13 @@ namespace DreamCleaningBackend.Controllers
             if (serviceType == null)
                 return NotFound();
 
-            // Check if there are any orders
             if (serviceType.Orders.Any())
             {
-                // CHANGED: Return JSON object instead of plain text
                 return BadRequest(new { message = "Cannot delete service type with existing orders. Please deactivate instead." });
             }
+
+            // LOG THE DELETION BEFORE REMOVING
+            await _auditService.LogDeleteAsync(serviceType);
 
             _context.ServiceTypes.Remove(serviceType);
             await _context.SaveChangesAsync();
@@ -289,6 +344,8 @@ namespace DreamCleaningBackend.Controllers
 
             _context.Services.Add(service);
             await _context.SaveChangesAsync();
+
+            await _auditService.LogCreateAsync(service);
 
             return Ok(new ServiceDto
             {
@@ -366,6 +423,27 @@ namespace DreamCleaningBackend.Controllers
             if (service == null)
                 return NotFound();
 
+            // CREATE A COPY FOR AUDITING
+            var originalService = new Service
+            {
+                Id = service.Id,
+                Name = service.Name,
+                ServiceKey = service.ServiceKey,
+                Cost = service.Cost,
+                TimeDuration = service.TimeDuration,
+                ServiceTypeId = service.ServiceTypeId,
+                InputType = service.InputType,
+                MinValue = service.MinValue,
+                MaxValue = service.MaxValue,
+                StepValue = service.StepValue,
+                IsRangeInput = service.IsRangeInput,
+                Unit = service.Unit,
+                ServiceRelationType = service.ServiceRelationType,
+                DisplayOrder = service.DisplayOrder,
+                IsActive = service.IsActive
+            };
+
+            // Update all fields
             service.Name = dto.Name;
             service.ServiceKey = dto.ServiceKey;
             service.Cost = dto.Cost;
@@ -377,9 +455,12 @@ namespace DreamCleaningBackend.Controllers
             service.StepValue = dto.StepValue;
             service.IsRangeInput = dto.IsRangeInput;
             service.Unit = dto.Unit;
-            service.ServiceRelationType = dto.ServiceRelationType; // ADD THIS
+            service.ServiceRelationType = dto.ServiceRelationType;
             service.DisplayOrder = dto.DisplayOrder;
             service.UpdatedAt = DateTime.UtcNow;
+
+            // LOG THE UPDATE
+            await _auditService.LogUpdateAsync(originalService, service);
 
             await _context.SaveChangesAsync();
 
@@ -410,9 +491,65 @@ namespace DreamCleaningBackend.Controllers
             if (service == null)
                 return NotFound();
 
+            // CREATE A COPY WITH ALL CURRENT VALUES
+            var originalService = new Service
+            {
+                Id = service.Id,
+                Name = service.Name,
+                ServiceKey = service.ServiceKey,
+                Cost = service.Cost,
+                TimeDuration = service.TimeDuration,
+                ServiceTypeId = service.ServiceTypeId,
+                InputType = service.InputType,
+                MinValue = service.MinValue,
+                MaxValue = service.MaxValue,
+                StepValue = service.StepValue,
+                IsRangeInput = service.IsRangeInput,
+                Unit = service.Unit,
+                ServiceRelationType = service.ServiceRelationType,
+                DisplayOrder = service.DisplayOrder,
+                IsActive = service.IsActive,
+                CreatedAt = service.CreatedAt,
+                UpdatedAt = service.UpdatedAt
+            };
+
             service.IsActive = false;
             service.UpdatedAt = DateTime.UtcNow;
+
+            // Save first
             await _context.SaveChangesAsync();
+
+            // CREATE UPDATED COPY
+            var updatedService = new Service
+            {
+                Id = service.Id,
+                Name = service.Name,
+                ServiceKey = service.ServiceKey,
+                Cost = service.Cost,
+                TimeDuration = service.TimeDuration,
+                ServiceTypeId = service.ServiceTypeId,
+                InputType = service.InputType,
+                MinValue = service.MinValue,
+                MaxValue = service.MaxValue,
+                StepValue = service.StepValue,
+                IsRangeInput = service.IsRangeInput,
+                Unit = service.Unit,
+                ServiceRelationType = service.ServiceRelationType,
+                DisplayOrder = service.DisplayOrder,
+                IsActive = service.IsActive,
+                CreatedAt = service.CreatedAt,
+                UpdatedAt = service.UpdatedAt
+            };
+
+            // LOG THE UPDATE
+            try
+            {
+                await _auditService.LogUpdateAsync(originalService, updatedService);
+            }
+            catch (Exception auditEx)
+            {
+                Console.WriteLine($"Audit logging failed: {auditEx.Message}");
+            }
 
             return Ok();
         }
@@ -425,9 +562,65 @@ namespace DreamCleaningBackend.Controllers
             if (service == null)
                 return NotFound();
 
+            // CREATE A COPY WITH ALL CURRENT VALUES
+            var originalService = new Service
+            {
+                Id = service.Id,
+                Name = service.Name,
+                ServiceKey = service.ServiceKey,
+                Cost = service.Cost,
+                TimeDuration = service.TimeDuration,
+                ServiceTypeId = service.ServiceTypeId,
+                InputType = service.InputType,
+                MinValue = service.MinValue,
+                MaxValue = service.MaxValue,
+                StepValue = service.StepValue,
+                IsRangeInput = service.IsRangeInput,
+                Unit = service.Unit,
+                ServiceRelationType = service.ServiceRelationType,
+                DisplayOrder = service.DisplayOrder,
+                IsActive = service.IsActive,
+                CreatedAt = service.CreatedAt,
+                UpdatedAt = service.UpdatedAt
+            };
+
             service.IsActive = true;
             service.UpdatedAt = DateTime.UtcNow;
+
+            // Save first
             await _context.SaveChangesAsync();
+
+            // CREATE UPDATED COPY
+            var updatedService = new Service
+            {
+                Id = service.Id,
+                Name = service.Name,
+                ServiceKey = service.ServiceKey,
+                Cost = service.Cost,
+                TimeDuration = service.TimeDuration,
+                ServiceTypeId = service.ServiceTypeId,
+                InputType = service.InputType,
+                MinValue = service.MinValue,
+                MaxValue = service.MaxValue,
+                StepValue = service.StepValue,
+                IsRangeInput = service.IsRangeInput,
+                Unit = service.Unit,
+                ServiceRelationType = service.ServiceRelationType,
+                DisplayOrder = service.DisplayOrder,
+                IsActive = service.IsActive,
+                CreatedAt = service.CreatedAt,
+                UpdatedAt = service.UpdatedAt
+            };
+
+            // LOG THE UPDATE
+            try
+            {
+                await _auditService.LogUpdateAsync(originalService, updatedService);
+            }
+            catch (Exception auditEx)
+            {
+                Console.WriteLine($"Audit logging failed: {auditEx.Message}");
+            }
 
             return Ok();
         }
@@ -449,6 +642,8 @@ namespace DreamCleaningBackend.Controllers
                 // CHANGED: Return JSON object instead of plain text
                 return BadRequest(new { message = "Cannot delete service with existing orders. Please deactivate instead." });
             }
+
+            await _auditService.LogDeleteAsync(service);
 
             _context.Services.Remove(service);
             await _context.SaveChangesAsync();
@@ -510,6 +705,8 @@ namespace DreamCleaningBackend.Controllers
 
             _context.ExtraServices.Add(extraService);
             await _context.SaveChangesAsync();
+
+            await _auditService.LogCreateAsync(extraService);
 
             return Ok(new ExtraServiceDto
             {
@@ -588,6 +785,28 @@ namespace DreamCleaningBackend.Controllers
             if (extraService == null)
                 return NotFound();
 
+            // CREATE A COPY FOR AUDITING
+            var originalExtraService = new ExtraService
+            {
+                Id = extraService.Id,
+                Name = extraService.Name,
+                Description = extraService.Description,
+                Price = extraService.Price,
+                Duration = extraService.Duration,
+                Icon = extraService.Icon,
+                HasQuantity = extraService.HasQuantity,
+                HasHours = extraService.HasHours,
+                IsDeepCleaning = extraService.IsDeepCleaning,
+                IsSuperDeepCleaning = extraService.IsSuperDeepCleaning,
+                IsSameDayService = extraService.IsSameDayService,
+                PriceMultiplier = extraService.PriceMultiplier,
+                ServiceTypeId = extraService.ServiceTypeId,
+                IsAvailableForAll = extraService.IsAvailableForAll,
+                DisplayOrder = extraService.DisplayOrder,
+                IsActive = extraService.IsActive
+            };
+
+            // Update fields
             extraService.Name = dto.Name;
             extraService.Description = dto.Description;
             extraService.Price = dto.Price;
@@ -603,6 +822,9 @@ namespace DreamCleaningBackend.Controllers
             extraService.IsAvailableForAll = dto.IsAvailableForAll;
             extraService.DisplayOrder = dto.DisplayOrder;
             extraService.UpdatedAt = DateTime.UtcNow;
+
+            // LOG THE UPDATE
+            await _auditService.LogUpdateAsync(originalExtraService, extraService);
 
             await _context.SaveChangesAsync();
 
@@ -633,9 +855,67 @@ namespace DreamCleaningBackend.Controllers
             if (extraService == null)
                 return NotFound();
 
+            // CREATE A COPY WITH ALL CURRENT VALUES
+            var originalExtraService = new ExtraService
+            {
+                Id = extraService.Id,
+                Name = extraService.Name,
+                Description = extraService.Description,
+                Price = extraService.Price,
+                Duration = extraService.Duration,
+                Icon = extraService.Icon,
+                HasQuantity = extraService.HasQuantity,
+                HasHours = extraService.HasHours,
+                IsDeepCleaning = extraService.IsDeepCleaning,
+                IsSuperDeepCleaning = extraService.IsSuperDeepCleaning,
+                IsSameDayService = extraService.IsSameDayService,
+                PriceMultiplier = extraService.PriceMultiplier,
+                ServiceTypeId = extraService.ServiceTypeId,
+                IsAvailableForAll = extraService.IsAvailableForAll,
+                DisplayOrder = extraService.DisplayOrder,
+                IsActive = extraService.IsActive,
+                CreatedAt = extraService.CreatedAt,
+                UpdatedAt = extraService.UpdatedAt
+            };
+
             extraService.IsActive = false;
             extraService.UpdatedAt = DateTime.UtcNow;
+
+            // Save first
             await _context.SaveChangesAsync();
+
+            // CREATE UPDATED COPY
+            var updatedExtraService = new ExtraService
+            {
+                Id = extraService.Id,
+                Name = extraService.Name,
+                Description = extraService.Description,
+                Price = extraService.Price,
+                Duration = extraService.Duration,
+                Icon = extraService.Icon,
+                HasQuantity = extraService.HasQuantity,
+                HasHours = extraService.HasHours,
+                IsDeepCleaning = extraService.IsDeepCleaning,
+                IsSuperDeepCleaning = extraService.IsSuperDeepCleaning,
+                IsSameDayService = extraService.IsSameDayService,
+                PriceMultiplier = extraService.PriceMultiplier,
+                ServiceTypeId = extraService.ServiceTypeId,
+                IsAvailableForAll = extraService.IsAvailableForAll,
+                DisplayOrder = extraService.DisplayOrder,
+                IsActive = extraService.IsActive,
+                CreatedAt = extraService.CreatedAt,
+                UpdatedAt = extraService.UpdatedAt
+            };
+
+            // LOG THE UPDATE
+            try
+            {
+                await _auditService.LogUpdateAsync(originalExtraService, updatedExtraService);
+            }
+            catch (Exception auditEx)
+            {
+                Console.WriteLine($"Audit logging failed: {auditEx.Message}");
+            }
 
             return Ok();
         }
@@ -648,9 +928,67 @@ namespace DreamCleaningBackend.Controllers
             if (extraService == null)
                 return NotFound();
 
+            // CREATE A COPY WITH ALL CURRENT VALUES
+            var originalExtraService = new ExtraService
+            {
+                Id = extraService.Id,
+                Name = extraService.Name,
+                Description = extraService.Description,
+                Price = extraService.Price,
+                Duration = extraService.Duration,
+                Icon = extraService.Icon,
+                HasQuantity = extraService.HasQuantity,
+                HasHours = extraService.HasHours,
+                IsDeepCleaning = extraService.IsDeepCleaning,
+                IsSuperDeepCleaning = extraService.IsSuperDeepCleaning,
+                IsSameDayService = extraService.IsSameDayService,
+                PriceMultiplier = extraService.PriceMultiplier,
+                ServiceTypeId = extraService.ServiceTypeId,
+                IsAvailableForAll = extraService.IsAvailableForAll,
+                DisplayOrder = extraService.DisplayOrder,
+                IsActive = extraService.IsActive,
+                CreatedAt = extraService.CreatedAt,
+                UpdatedAt = extraService.UpdatedAt
+            };
+
             extraService.IsActive = true;
             extraService.UpdatedAt = DateTime.UtcNow;
+
+            // Save first
             await _context.SaveChangesAsync();
+
+            // CREATE UPDATED COPY
+            var updatedExtraService = new ExtraService
+            {
+                Id = extraService.Id,
+                Name = extraService.Name,
+                Description = extraService.Description,
+                Price = extraService.Price,
+                Duration = extraService.Duration,
+                Icon = extraService.Icon,
+                HasQuantity = extraService.HasQuantity,
+                HasHours = extraService.HasHours,
+                IsDeepCleaning = extraService.IsDeepCleaning,
+                IsSuperDeepCleaning = extraService.IsSuperDeepCleaning,
+                IsSameDayService = extraService.IsSameDayService,
+                PriceMultiplier = extraService.PriceMultiplier,
+                ServiceTypeId = extraService.ServiceTypeId,
+                IsAvailableForAll = extraService.IsAvailableForAll,
+                DisplayOrder = extraService.DisplayOrder,
+                IsActive = extraService.IsActive,
+                CreatedAt = extraService.CreatedAt,
+                UpdatedAt = extraService.UpdatedAt
+            };
+
+            // LOG THE UPDATE
+            try
+            {
+                await _auditService.LogUpdateAsync(originalExtraService, updatedExtraService);
+            }
+            catch (Exception auditEx)
+            {
+                Console.WriteLine($"Audit logging failed: {auditEx.Message}");
+            }
 
             return Ok();
         }
@@ -672,6 +1010,8 @@ namespace DreamCleaningBackend.Controllers
                 // CHANGED: Return JSON object instead of plain text
                 return BadRequest(new { message = "Cannot delete extra service with existing orders. Please deactivate instead." });
             }
+
+            await _auditService.LogDeleteAsync(extraService);
 
             _context.ExtraServices.Remove(extraService);
             await _context.SaveChangesAsync();
@@ -716,6 +1056,8 @@ namespace DreamCleaningBackend.Controllers
             _context.Subscriptions.Add(subscription);
             await _context.SaveChangesAsync();
 
+            await _auditService.LogCreateAsync(subscription);
+
             return Ok(new SubscriptionDto
             {
                 Id = subscription.Id,
@@ -734,12 +1076,27 @@ namespace DreamCleaningBackend.Controllers
             if (subscription == null)
                 return NotFound();
 
+            // CREATE A COPY FOR AUDITING
+            var originalSubscription = new Subscription
+            {
+                Id = subscription.Id,
+                Name = subscription.Name,
+                Description = subscription.Description,
+                DiscountPercentage = subscription.DiscountPercentage,
+                SubscriptionDays = subscription.SubscriptionDays,
+                DisplayOrder = subscription.DisplayOrder,
+                IsActive = subscription.IsActive
+            };
+
             subscription.Name = dto.Name;
             subscription.Description = dto.Description;
             subscription.DiscountPercentage = dto.DiscountPercentage;
             subscription.SubscriptionDays = dto.SubscriptionDays;
             subscription.DisplayOrder = dto.DisplayOrder;
             subscription.UpdatedAt = DateTime.UtcNow;
+
+            // LOG THE UPDATE
+            await _auditService.LogUpdateAsync(originalSubscription, subscription);
 
             await _context.SaveChangesAsync();
 
@@ -764,6 +1121,8 @@ namespace DreamCleaningBackend.Controllers
             subscription.IsActive = false;
             subscription.UpdatedAt = DateTime.UtcNow;
 
+            await _auditService.LogDeleteAsync(subscription);
+
             await _context.SaveChangesAsync();
             return Ok();
         }
@@ -780,10 +1139,49 @@ namespace DreamCleaningBackend.Controllers
                     return NotFound(new { message = "Subscription not found" });
                 }
 
+                // CREATE A COPY WITH ALL CURRENT VALUES
+                var originalSubscription = new Subscription
+                {
+                    Id = subscription.Id,
+                    Name = subscription.Name,
+                    Description = subscription.Description,
+                    DiscountPercentage = subscription.DiscountPercentage,
+                    SubscriptionDays = subscription.SubscriptionDays,
+                    IsActive = subscription.IsActive,
+                    DisplayOrder = subscription.DisplayOrder,
+                    CreatedAt = subscription.CreatedAt,
+                    UpdatedAt = subscription.UpdatedAt
+                };
+
                 subscription.IsActive = false;
                 subscription.UpdatedAt = DateTime.UtcNow;
 
+                // Save first
                 await _context.SaveChangesAsync();
+
+                // CREATE UPDATED COPY
+                var updatedSubscription = new Subscription
+                {
+                    Id = subscription.Id,
+                    Name = subscription.Name,
+                    Description = subscription.Description,
+                    DiscountPercentage = subscription.DiscountPercentage,
+                    SubscriptionDays = subscription.SubscriptionDays,
+                    IsActive = subscription.IsActive,
+                    DisplayOrder = subscription.DisplayOrder,
+                    CreatedAt = subscription.CreatedAt,
+                    UpdatedAt = subscription.UpdatedAt
+                };
+
+                // LOG THE UPDATE
+                try
+                {
+                    await _auditService.LogUpdateAsync(originalSubscription, updatedSubscription);
+                }
+                catch (Exception auditEx)
+                {
+                    Console.WriteLine($"Audit logging failed: {auditEx.Message}");
+                }
 
                 return Ok(new { message = "Subscription deactivated successfully", subscription });
             }
@@ -805,10 +1203,49 @@ namespace DreamCleaningBackend.Controllers
                     return NotFound(new { message = "Subscription not found" });
                 }
 
+                // CREATE A COPY WITH ALL CURRENT VALUES
+                var originalSubscription = new Subscription
+                {
+                    Id = subscription.Id,
+                    Name = subscription.Name,
+                    Description = subscription.Description,
+                    DiscountPercentage = subscription.DiscountPercentage,
+                    SubscriptionDays = subscription.SubscriptionDays,
+                    IsActive = subscription.IsActive,
+                    DisplayOrder = subscription.DisplayOrder,
+                    CreatedAt = subscription.CreatedAt,
+                    UpdatedAt = subscription.UpdatedAt
+                };
+
                 subscription.IsActive = true;
                 subscription.UpdatedAt = DateTime.UtcNow;
 
+                // Save first
                 await _context.SaveChangesAsync();
+
+                // CREATE UPDATED COPY
+                var updatedSubscription = new Subscription
+                {
+                    Id = subscription.Id,
+                    Name = subscription.Name,
+                    Description = subscription.Description,
+                    DiscountPercentage = subscription.DiscountPercentage,
+                    SubscriptionDays = subscription.SubscriptionDays,
+                    IsActive = subscription.IsActive,
+                    DisplayOrder = subscription.DisplayOrder,
+                    CreatedAt = subscription.CreatedAt,
+                    UpdatedAt = subscription.UpdatedAt
+                };
+
+                // LOG THE UPDATE
+                try
+                {
+                    await _auditService.LogUpdateAsync(originalSubscription, updatedSubscription);
+                }
+                catch (Exception auditEx)
+                {
+                    Console.WriteLine($"Audit logging failed: {auditEx.Message}");
+                }
 
                 return Ok(new { message = "Subscription activated successfully", subscription });
             }
@@ -817,7 +1254,6 @@ namespace DreamCleaningBackend.Controllers
                 return StatusCode(500, new { message = "Error activating subscription", error = ex.Message });
             }
         }
-
 
         // Promo Codes Management (keeping existing)
         [HttpGet("promo-codes")]
@@ -868,6 +1304,8 @@ namespace DreamCleaningBackend.Controllers
             _context.PromoCodes.Add(promoCode);
             await _context.SaveChangesAsync();
 
+            await _auditService.LogCreateAsync(promoCode);
+
             return Ok(new PromoCodeDto
             {
                 Id = promoCode.Id,
@@ -893,6 +1331,23 @@ namespace DreamCleaningBackend.Controllers
             if (promoCode == null)
                 return NotFound();
 
+            // CREATE A COPY FOR AUDITING
+            var originalPromoCode = new PromoCode
+            {
+                Id = promoCode.Id,
+                Code = promoCode.Code,
+                Description = promoCode.Description,
+                IsPercentage = promoCode.IsPercentage,
+                DiscountValue = promoCode.DiscountValue,
+                MaxUsageCount = promoCode.MaxUsageCount,
+                CurrentUsageCount = promoCode.CurrentUsageCount,
+                MaxUsagePerUser = promoCode.MaxUsagePerUser,
+                ValidFrom = promoCode.ValidFrom,
+                ValidTo = promoCode.ValidTo,
+                MinimumOrderAmount = promoCode.MinimumOrderAmount,
+                IsActive = promoCode.IsActive
+            };
+
             promoCode.Description = dto.Description;
             promoCode.IsPercentage = dto.IsPercentage;
             promoCode.DiscountValue = dto.DiscountValue;
@@ -902,6 +1357,9 @@ namespace DreamCleaningBackend.Controllers
             promoCode.ValidTo = dto.ValidTo;
             promoCode.MinimumOrderAmount = dto.MinimumOrderAmount;
             promoCode.UpdatedAt = DateTime.UtcNow;
+
+            // LOG THE UPDATE
+            await _auditService.LogUpdateAsync(originalPromoCode, promoCode);
 
             await _context.SaveChangesAsync();
 
@@ -930,6 +1388,8 @@ namespace DreamCleaningBackend.Controllers
             if (promoCode == null)
                 return NotFound();
 
+            await _auditService.LogDeleteAsync(promoCode);
+
             _context.PromoCodes.Remove(promoCode);
             await _context.SaveChangesAsync();
 
@@ -948,10 +1408,59 @@ namespace DreamCleaningBackend.Controllers
                     return NotFound(new { message = "PromoCode not found" });
                 }
 
+                // CREATE A COPY WITH ALL CURRENT VALUES
+                var originalPromoCode = new PromoCode
+                {
+                    Id = promoCode.Id,
+                    Code = promoCode.Code,
+                    Description = promoCode.Description,
+                    IsPercentage = promoCode.IsPercentage,
+                    DiscountValue = promoCode.DiscountValue,
+                    MaxUsageCount = promoCode.MaxUsageCount,
+                    CurrentUsageCount = promoCode.CurrentUsageCount,
+                    MaxUsagePerUser = promoCode.MaxUsagePerUser,
+                    ValidFrom = promoCode.ValidFrom,
+                    ValidTo = promoCode.ValidTo,
+                    MinimumOrderAmount = promoCode.MinimumOrderAmount,
+                    IsActive = promoCode.IsActive,
+                    CreatedAt = promoCode.CreatedAt,
+                    UpdatedAt = promoCode.UpdatedAt
+                };
+
                 promoCode.IsActive = false;
                 promoCode.UpdatedAt = DateTime.UtcNow;
 
+                // Save first
                 await _context.SaveChangesAsync();
+
+                // CREATE UPDATED COPY
+                var updatedPromoCode = new PromoCode
+                {
+                    Id = promoCode.Id,
+                    Code = promoCode.Code,
+                    Description = promoCode.Description,
+                    IsPercentage = promoCode.IsPercentage,
+                    DiscountValue = promoCode.DiscountValue,
+                    MaxUsageCount = promoCode.MaxUsageCount,
+                    CurrentUsageCount = promoCode.CurrentUsageCount,
+                    MaxUsagePerUser = promoCode.MaxUsagePerUser,
+                    ValidFrom = promoCode.ValidFrom,
+                    ValidTo = promoCode.ValidTo,
+                    MinimumOrderAmount = promoCode.MinimumOrderAmount,
+                    IsActive = promoCode.IsActive,
+                    CreatedAt = promoCode.CreatedAt,
+                    UpdatedAt = promoCode.UpdatedAt
+                };
+
+                // LOG THE UPDATE
+                try
+                {
+                    await _auditService.LogUpdateAsync(originalPromoCode, updatedPromoCode);
+                }
+                catch (Exception auditEx)
+                {
+                    Console.WriteLine($"Audit logging failed: {auditEx.Message}");
+                }
 
                 return Ok(new { message = "PromoCode deactivated successfully", promoCode });
             }
@@ -973,10 +1482,59 @@ namespace DreamCleaningBackend.Controllers
                     return NotFound(new { message = "PromoCode not found" });
                 }
 
+                // CREATE A COPY WITH ALL CURRENT VALUES
+                var originalPromoCode = new PromoCode
+                {
+                    Id = promoCode.Id,
+                    Code = promoCode.Code,
+                    Description = promoCode.Description,
+                    IsPercentage = promoCode.IsPercentage,
+                    DiscountValue = promoCode.DiscountValue,
+                    MaxUsageCount = promoCode.MaxUsageCount,
+                    CurrentUsageCount = promoCode.CurrentUsageCount,
+                    MaxUsagePerUser = promoCode.MaxUsagePerUser,
+                    ValidFrom = promoCode.ValidFrom,
+                    ValidTo = promoCode.ValidTo,
+                    MinimumOrderAmount = promoCode.MinimumOrderAmount,
+                    IsActive = promoCode.IsActive,
+                    CreatedAt = promoCode.CreatedAt,
+                    UpdatedAt = promoCode.UpdatedAt
+                };
+
                 promoCode.IsActive = true;
                 promoCode.UpdatedAt = DateTime.UtcNow;
 
+                // Save first
                 await _context.SaveChangesAsync();
+
+                // CREATE UPDATED COPY
+                var updatedPromoCode = new PromoCode
+                {
+                    Id = promoCode.Id,
+                    Code = promoCode.Code,
+                    Description = promoCode.Description,
+                    IsPercentage = promoCode.IsPercentage,
+                    DiscountValue = promoCode.DiscountValue,
+                    MaxUsageCount = promoCode.MaxUsageCount,
+                    CurrentUsageCount = promoCode.CurrentUsageCount,
+                    MaxUsagePerUser = promoCode.MaxUsagePerUser,
+                    ValidFrom = promoCode.ValidFrom,
+                    ValidTo = promoCode.ValidTo,
+                    MinimumOrderAmount = promoCode.MinimumOrderAmount,
+                    IsActive = promoCode.IsActive,
+                    CreatedAt = promoCode.CreatedAt,
+                    UpdatedAt = promoCode.UpdatedAt
+                };
+
+                // LOG THE UPDATE
+                try
+                {
+                    await _auditService.LogUpdateAsync(originalPromoCode, updatedPromoCode);
+                }
+                catch (Exception auditEx)
+                {
+                    Console.WriteLine($"Audit logging failed: {auditEx.Message}");
+                }
 
                 return Ok(new { message = "PromoCode activated successfully", promoCode });
             }
@@ -1026,35 +1584,61 @@ namespace DreamCleaningBackend.Controllers
         {
             Console.WriteLine($"Admin: Updating user {id} role to {dto.Role}");
 
-            // Get current user's role
             var currentUserRole = GetCurrentUserRole();
-
-            // Get the target user
             var targetUser = await _context.Users.FindAsync(id);
             if (targetUser == null)
                 return NotFound();
 
-            // Parse the new role
+            // Create audit copy
+            var originalUser = new User
+            {
+                Id = targetUser.Id,
+                FirstName = targetUser.FirstName,
+                LastName = targetUser.LastName,
+                Email = targetUser.Email,
+                Phone = targetUser.Phone,
+                Role = targetUser.Role,
+                IsActive = targetUser.IsActive,
+                AuthProvider = targetUser.AuthProvider,
+                FirstTimeOrder = targetUser.FirstTimeOrder
+            };
+
             if (!Enum.TryParse<UserRole>(dto.Role, out var newRole))
                 return BadRequest("Invalid role");
 
-            // Apply role change restrictions
             var validationResult = ValidateRoleChange(currentUserRole, targetUser.Role, newRole);
             if (!validationResult.IsValid)
                 return BadRequest(new { message = validationResult.ErrorMessage });
 
-            // Update the role
             targetUser.Role = newRole;
             targetUser.UpdatedAt = DateTime.UtcNow;
+
             await _context.SaveChangesAsync();
 
-            Console.WriteLine($"Admin: User {id} role updated in database to {newRole}");
+            // Log audit
+            try
+            {
+                await _auditService.LogUpdateAsync(originalUser, targetUser);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Audit logging failed: {ex.Message}");
+            }
 
-            // Real-time notification - Send immediately after database update
-            var userManagementService = HttpContext.RequestServices.GetRequiredService<IUserManagementService>();
-            await userManagementService.NotifyUserRoleChanged(id, newRole.ToString());
+            // Send notification and ensure it's delivered
+            try
+            {
+                var userManagementService = HttpContext.RequestServices.GetRequiredService<IUserManagementService>();
+                await userManagementService.NotifyUserRoleChanged(id, newRole.ToString());
 
-            Console.WriteLine($"Admin: Role change notification sent to user {id}");
+                // Give time for the notification to be delivered via SignalR
+                await Task.Delay(1000);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to send role change notification: {ex.Message}");
+            }
+
             return Ok(new { message = "Role updated successfully" });
         }
 
@@ -1109,16 +1693,28 @@ namespace DreamCleaningBackend.Controllers
             if (targetUser == null)
                 return NotFound();
 
+            // Create audit copy
+            var originalUser = new User
+            {
+                Id = targetUser.Id,
+                FirstName = targetUser.FirstName,
+                LastName = targetUser.LastName,
+                Email = targetUser.Email,
+                Phone = targetUser.Phone,
+                Role = targetUser.Role,
+                IsActive = targetUser.IsActive,
+                AuthProvider = targetUser.AuthProvider,
+                FirstTimeOrder = targetUser.FirstTimeOrder
+            };
+
             var currentUserRole = GetCurrentUserRole();
             var targetUserRole = targetUser.Role;
 
-            // Prevent admins from deactivating/activating SuperAdmins
             if (currentUserRole == UserRole.Admin && targetUserRole == UserRole.SuperAdmin)
             {
                 return BadRequest(new { message = "Admins cannot modify SuperAdmin status" });
             }
 
-            // Optional: Prevent users from deactivating themselves
             var currentUserId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
             if (currentUserId == id && !dto.IsActive)
             {
@@ -1127,28 +1723,46 @@ namespace DreamCleaningBackend.Controllers
 
             targetUser.IsActive = dto.IsActive;
             targetUser.UpdatedAt = DateTime.UtcNow;
+
             await _context.SaveChangesAsync();
+
+            // Log audit
+            try
+            {
+                await _auditService.LogUpdateAsync(originalUser, targetUser);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Audit logging failed: {ex.Message}");
+            }
 
             Console.WriteLine($"Admin: User {id} status updated in database");
 
-            // Real-time notification
-            var userManagementService = HttpContext.RequestServices.GetRequiredService<IUserManagementService>();
-
-            if (!dto.IsActive)
+            // Send notification
+            try
             {
-                Console.WriteLine($"Admin: Sending block notification to user {id}");
-                // User is being blocked
-                await userManagementService.NotifyUserBlocked(id, "Your account has been blocked by an administrator.");
+                var userManagementService = HttpContext.RequestServices.GetRequiredService<IUserManagementService>();
+
+                if (!dto.IsActive)
+                {
+                    // User is being blocked
+                    await userManagementService.NotifyUserBlocked(id, "Your account has been blocked by an administrator.");
+                    // Give more time for block notification
+                    await Task.Delay(2000);
+                }
+                else
+                {
+                    // User is being unblocked
+                    await userManagementService.NotifyUserUnblocked(id);
+                    await Task.Delay(1000);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                Console.WriteLine($"Admin: Sending unblock notification to user {id}");
-                // User is being unblocked
-                await userManagementService.NotifyUserUnblocked(id);
+                Console.WriteLine($"Failed to send status change notification: {ex.Message}");
             }
 
-            Console.WriteLine($"Admin: Notification sent for user {id}");
-            return Ok();
+            return Ok(new { message = $"User {(dto.IsActive ? "activated" : "deactivated")} successfully" });
         }
 
         [HttpGet("permissions")]
@@ -1282,11 +1896,56 @@ namespace DreamCleaningBackend.Controllers
                 if (order == null)
                     return NotFound();
 
-                // No special role check needed - any user with Update permission can change status
-                order.Status = dto.Status;
-                order.UpdatedAt = DateTime.UtcNow;
+                // CREATE A COPY FOR AUDITING with only relevant fields
+                var originalOrder = new Order
+                {
+                    Id = order.Id,
+                    Status = order.Status,
+                    UserId = order.UserId,
+                    Total = order.Total,
+                    ServiceDate = order.ServiceDate,
+                    ServiceTime = order.ServiceTime,
+                    OrderDate = order.OrderDate,
+                    ContactFirstName = order.ContactFirstName,
+                    ContactLastName = order.ContactLastName,
+                    ContactEmail = order.ContactEmail,
+                    UpdatedAt = order.UpdatedAt
+                };
 
+                // Update the status
+                order.Status = dto.Status;
+                order.UpdatedAt = DateTime.UtcNow; // Use UTC for consistency
+
+                // Save changes FIRST
                 await _context.SaveChangesAsync();
+
+                // Create a copy of the updated order for auditing
+                var updatedOrder = new Order
+                {
+                    Id = order.Id,
+                    Status = order.Status,
+                    UserId = order.UserId,
+                    Total = order.Total,
+                    ServiceDate = order.ServiceDate,
+                    ServiceTime = order.ServiceTime,
+                    OrderDate = order.OrderDate,
+                    ContactFirstName = order.ContactFirstName,
+                    ContactLastName = order.ContactLastName,
+                    ContactEmail = order.ContactEmail,
+                    UpdatedAt = order.UpdatedAt
+                };
+
+                // LOG THE UPDATE AFTER saving
+                try
+                {
+                    await _auditService.LogUpdateAsync(originalOrder, updatedOrder);
+                }
+                catch (Exception auditEx)
+                {
+                    // Log the audit failure but don't fail the main operation
+                    Console.WriteLine($"Audit logging failed: {auditEx.Message}");
+                }
+
                 return Ok(new { message = $"Order status updated to {dto.Status}" });
             }
             catch (Exception ex)
@@ -1296,7 +1955,7 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPost("orders/{orderId}/cancel")]
-        [RequirePermission(Permission.Update)]  // Using Update permission
+        [RequirePermission(Permission.Update)]
         public async Task<ActionResult> CancelOrder(int orderId, [FromBody] CancelOrderDto dto)
         {
             try
@@ -1305,14 +1964,60 @@ namespace DreamCleaningBackend.Controllers
                 if (order == null)
                     return NotFound();
 
-                // Use proper casing for status values
                 if (order.Status == "Cancelled" || order.Status == "Done")
                     return BadRequest(new { message = "Cannot cancel an order that is already cancelled or done." });
 
-                order.Status = "Cancelled";  // Capital C to match enum
-                order.UpdatedAt = DateTime.UtcNow;
+                // CREATE A COPY FOR AUDITING including cancellation fields
+                var originalOrder = new Order
+                {
+                    Id = order.Id,
+                    Status = order.Status,
+                    CancellationReason = order.CancellationReason,
+                    UserId = order.UserId,
+                    Total = order.Total,
+                    ServiceDate = order.ServiceDate,
+                    ServiceTime = order.ServiceTime,
+                    OrderDate = order.OrderDate,
+                    ContactFirstName = order.ContactFirstName,
+                    ContactLastName = order.ContactLastName,
+                    ContactEmail = order.ContactEmail,
+                    UpdatedAt = order.UpdatedAt
+                };
+
+                // Update the order with cancellation info
+                order.Status = "Cancelled";
+                order.CancellationReason = dto.Reason; // Save the reason
+                order.UpdatedAt = DateTime.Now;
 
                 await _context.SaveChangesAsync();
+
+                // Create updated copy for auditing
+                var updatedOrder = new Order
+                {
+                    Id = order.Id,
+                    Status = order.Status,
+                    CancellationReason = order.CancellationReason,
+                    UserId = order.UserId,
+                    Total = order.Total,
+                    ServiceDate = order.ServiceDate,
+                    ServiceTime = order.ServiceTime,
+                    OrderDate = order.OrderDate,
+                    ContactFirstName = order.ContactFirstName,
+                    ContactLastName = order.ContactLastName,
+                    ContactEmail = order.ContactEmail,
+                    UpdatedAt = order.UpdatedAt
+                };
+
+                // LOG THE UPDATE
+                try
+                {
+                    await _auditService.LogUpdateAsync(originalOrder, updatedOrder);
+                }
+                catch (Exception auditEx)
+                {
+                    Console.WriteLine($"Audit logging failed: {auditEx.Message}");
+                }
+
                 return Ok(new { message = "Order cancelled successfully." });
             }
             catch (Exception ex)
@@ -1527,10 +2232,63 @@ namespace DreamCleaningBackend.Controllers
                 if (giftCard == null)
                     return NotFound(new { message = "Gift card not found" });
 
+                // CREATE A COPY WITH ALL CURRENT VALUES
+                var originalGiftCard = new GiftCard
+                {
+                    Id = giftCard.Id,
+                    Code = giftCard.Code,
+                    OriginalAmount = giftCard.OriginalAmount,
+                    CurrentBalance = giftCard.CurrentBalance,
+                    RecipientName = giftCard.RecipientName,
+                    RecipientEmail = giftCard.RecipientEmail,
+                    SenderName = giftCard.SenderName,
+                    SenderEmail = giftCard.SenderEmail,
+                    Message = giftCard.Message,
+                    IsActive = giftCard.IsActive,
+                    PurchasedByUserId = giftCard.PurchasedByUserId,
+                    PaymentIntentId = giftCard.PaymentIntentId,
+                    IsPaid = giftCard.IsPaid,
+                    PaidAt = giftCard.PaidAt,
+                    CreatedAt = giftCard.CreatedAt,
+                    UpdatedAt = giftCard.UpdatedAt
+                };
+
                 giftCard.IsActive = false;
                 giftCard.UpdatedAt = DateTime.UtcNow;
 
+                // Save first
                 await _context.SaveChangesAsync();
+
+                // CREATE UPDATED COPY
+                var updatedGiftCard = new GiftCard
+                {
+                    Id = giftCard.Id,
+                    Code = giftCard.Code,
+                    OriginalAmount = giftCard.OriginalAmount,
+                    CurrentBalance = giftCard.CurrentBalance,
+                    RecipientName = giftCard.RecipientName,
+                    RecipientEmail = giftCard.RecipientEmail,
+                    SenderName = giftCard.SenderName,
+                    SenderEmail = giftCard.SenderEmail,
+                    Message = giftCard.Message,
+                    IsActive = giftCard.IsActive,
+                    PurchasedByUserId = giftCard.PurchasedByUserId,
+                    PaymentIntentId = giftCard.PaymentIntentId,
+                    IsPaid = giftCard.IsPaid,
+                    PaidAt = giftCard.PaidAt,
+                    CreatedAt = giftCard.CreatedAt,
+                    UpdatedAt = giftCard.UpdatedAt
+                };
+
+                // LOG THE UPDATE
+                try
+                {
+                    await _auditService.LogUpdateAsync(originalGiftCard, updatedGiftCard);
+                }
+                catch (Exception auditEx)
+                {
+                    Console.WriteLine($"Audit logging failed: {auditEx.Message}");
+                }
 
                 return Ok(new { message = "Gift card deactivated successfully" });
             }
@@ -1550,10 +2308,63 @@ namespace DreamCleaningBackend.Controllers
                 if (giftCard == null)
                     return NotFound(new { message = "Gift card not found" });
 
+                // CREATE A COPY WITH ALL CURRENT VALUES
+                var originalGiftCard = new GiftCard
+                {
+                    Id = giftCard.Id,
+                    Code = giftCard.Code,
+                    OriginalAmount = giftCard.OriginalAmount,
+                    CurrentBalance = giftCard.CurrentBalance,
+                    RecipientName = giftCard.RecipientName,
+                    RecipientEmail = giftCard.RecipientEmail,
+                    SenderName = giftCard.SenderName,
+                    SenderEmail = giftCard.SenderEmail,
+                    Message = giftCard.Message,
+                    IsActive = giftCard.IsActive,
+                    PurchasedByUserId = giftCard.PurchasedByUserId,
+                    PaymentIntentId = giftCard.PaymentIntentId,
+                    IsPaid = giftCard.IsPaid,
+                    PaidAt = giftCard.PaidAt,
+                    CreatedAt = giftCard.CreatedAt,
+                    UpdatedAt = giftCard.UpdatedAt
+                };
+
                 giftCard.IsActive = true;
                 giftCard.UpdatedAt = DateTime.UtcNow;
 
+                // Save first
                 await _context.SaveChangesAsync();
+
+                // CREATE UPDATED COPY
+                var updatedGiftCard = new GiftCard
+                {
+                    Id = giftCard.Id,
+                    Code = giftCard.Code,
+                    OriginalAmount = giftCard.OriginalAmount,
+                    CurrentBalance = giftCard.CurrentBalance,
+                    RecipientName = giftCard.RecipientName,
+                    RecipientEmail = giftCard.RecipientEmail,
+                    SenderName = giftCard.SenderName,
+                    SenderEmail = giftCard.SenderEmail,
+                    Message = giftCard.Message,
+                    IsActive = giftCard.IsActive,
+                    PurchasedByUserId = giftCard.PurchasedByUserId,
+                    PaymentIntentId = giftCard.PaymentIntentId,
+                    IsPaid = giftCard.IsPaid,
+                    PaidAt = giftCard.PaidAt,
+                    CreatedAt = giftCard.CreatedAt,
+                    UpdatedAt = giftCard.UpdatedAt
+                };
+
+                // LOG THE UPDATE
+                try
+                {
+                    await _auditService.LogUpdateAsync(originalGiftCard, updatedGiftCard);
+                }
+                catch (Exception auditEx)
+                {
+                    Console.WriteLine($"Audit logging failed: {auditEx.Message}");
+                }
 
                 return Ok(new { message = "Gift card activated successfully" });
             }
@@ -1561,6 +2372,95 @@ namespace DreamCleaningBackend.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        [HttpGet("audit-logs/{entityType}/{entityId}")]
+        [RequirePermission(Permission.View)]
+        public async Task<IActionResult> GetEntityHistory(string entityType, long entityId)
+        {
+            var history = await _auditService.GetEntityHistoryAsync(entityType, entityId);
+
+            var result = history.Select(log => new
+            {
+                log.Id,
+                log.Action,
+                log.CreatedAt,
+                ChangedBy = log.User?.FirstName + " " + log.User?.LastName,
+                ChangedByEmail = log.User?.Email,
+                OldValues = string.IsNullOrEmpty(log.OldValues) ? null : JsonConvert.DeserializeObject(log.OldValues),
+                NewValues = string.IsNullOrEmpty(log.NewValues) ? null : JsonConvert.DeserializeObject(log.NewValues),
+                ChangedFields = string.IsNullOrEmpty(log.ChangedFields) ? null : JsonConvert.DeserializeObject<List<string>>(log.ChangedFields)
+            });
+
+            return Ok(result);
+        }
+
+        [HttpGet("audit-logs")]
+        [RequirePermission(Permission.View)]
+        public async Task<IActionResult> GetRecentAuditLogs([FromQuery] int? days = 7)
+        {
+            var startDate = DateTime.UtcNow.AddDays(-days.Value);
+
+            var logs = await _context.AuditLogs
+                .Where(a => a.CreatedAt >= startDate)
+                .OrderByDescending(a => a.CreatedAt)
+                .Include(a => a.User)
+                .ToListAsync();
+
+            var result = logs.Select(log => new
+            {
+                id = log.Id,
+                entityType = log.EntityType,
+                entityId = log.EntityId,
+                action = log.Action,
+                createdAt = log.CreatedAt,
+                changedBy = log.User?.FirstName + " " + log.User?.LastName,
+                changedByEmail = log.User?.Email,
+                oldValues = log.OldValues,      // lowercase
+                newValues = log.NewValues,      // lowercase
+                changedFields = log.ChangedFields  // lowercase
+            }).ToList();
+
+            return Ok(result);
+        }
+
+        [HttpGet("users/{userId}/history")]
+        [RequirePermission(Permission.View)]
+        public async Task<ActionResult> GetUserCompleteHistory(int userId)
+        {
+            // Get all audit logs related to this user
+            var userLogs = await _auditService.GetEntityHistoryAsync("User", userId);
+
+            // Get all orders by this user and their audit logs
+            var userOrders = await _context.Orders
+                .Where(o => o.UserId == userId)
+                .Select(o => o.Id)
+                .ToListAsync();
+
+            var orderLogs = new List<AuditLog>();
+            foreach (var orderId in userOrders)
+            {
+                var logs = await _auditService.GetEntityHistoryAsync("Order", orderId);
+                orderLogs.AddRange(logs);
+            }
+
+            // Combine and format
+            var allLogs = userLogs.Concat(orderLogs)
+                .OrderByDescending(l => l.CreatedAt)
+                .Select(log => new
+                {
+                    log.Id,
+                    log.EntityType,
+                    log.EntityId,
+                    log.Action,
+                    log.CreatedAt,
+                    ChangedBy = log.User?.FirstName + " " + log.User?.LastName,
+                    OldValues = string.IsNullOrEmpty(log.OldValues) ? null : JsonConvert.DeserializeObject(log.OldValues),
+                    NewValues = string.IsNullOrEmpty(log.NewValues) ? null : JsonConvert.DeserializeObject(log.NewValues),
+                    ChangedFields = string.IsNullOrEmpty(log.ChangedFields) ? null : JsonConvert.DeserializeObject<List<string>>(log.ChangedFields)
+                });
+
+            return Ok(allLogs);
         }
     }
 }

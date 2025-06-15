@@ -482,11 +482,12 @@ namespace DreamCleaningBackend.Services
                 throw new Exception("Cannot cancel a completed order");
 
             // Check if service date is not too close (e.g., within 24 hours)
-            if (order.ServiceDate <= DateTime.UtcNow.AddHours(24))
+            if (order.ServiceDate <= DateTime.Now.AddHours(24))
                 throw new Exception("Cannot cancel order within 24 hours of service date");
 
             order.Status = "Cancelled";
-            order.UpdatedAt = DateTime.UtcNow;
+            order.CancellationReason = cancelOrderDto.Reason;
+            order.UpdatedAt = DateTime.Now;
 
             // In a real system, you would initiate a refund process here
             // For now, we'll just mark it as cancelled

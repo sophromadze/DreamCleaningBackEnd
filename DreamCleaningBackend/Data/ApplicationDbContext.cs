@@ -24,10 +24,24 @@ namespace DreamCleaningBackend.Data
         public DbSet<PromoCode> PromoCodes { get; set; }
         public DbSet<GiftCard> GiftCards { get; set; }
         public DbSet<GiftCardUsage> GiftCardUsages { get; set; }
+        public DbSet<AuditLog> AuditLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // AuditLog configuration
+            modelBuilder.Entity<AuditLog>(entity =>
+            {
+                entity.HasIndex(e => new { e.EntityType, e.EntityId })
+                    .HasDatabaseName("IX_AuditLogs_Entity");
+
+                entity.HasIndex(e => e.CreatedAt)
+                    .HasDatabaseName("IX_AuditLogs_CreatedAt");
+
+                entity.HasIndex(e => e.UserId)
+                    .HasDatabaseName("IX_AuditLogs_UserId");
+            });
 
             // User configuration
             modelBuilder.Entity<User>()

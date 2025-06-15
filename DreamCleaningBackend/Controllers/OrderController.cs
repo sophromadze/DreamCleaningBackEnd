@@ -6,6 +6,7 @@ using DreamCleaningBackend.Services.Interfaces;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using DreamCleaningBackend.Data;
+using DreamCleaningBackend.Models;
 
 namespace DreamCleaningBackend.Controllers
 {
@@ -16,11 +17,13 @@ namespace DreamCleaningBackend.Controllers
     {
         private readonly IOrderService _orderService;
         private readonly ApplicationDbContext _context;
+        private readonly IAuditService _auditService;
 
-        public OrderController(IOrderService orderService, ApplicationDbContext context)
+        public OrderController(IOrderService orderService, ApplicationDbContext context, IAuditService auditService)
         {
             _orderService = orderService;
             _context = context;
+            _auditService = auditService;
         }
 
         [HttpGet]
@@ -59,7 +62,33 @@ namespace DreamCleaningBackend.Controllers
             try
             {
                 var userId = GetUserId();
+
+                // Get the order before update
+                var orderBefore = await _context.Orders.AsNoTracking()
+                    .FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
+
+                if (orderBefore == null)
+                    return NotFound();
+
                 var order = await _orderService.UpdateOrder(orderId, userId, updateOrderDto);
+
+                // Get the order after update
+                var orderAfter = await _context.Orders
+                    .FirstOrDefaultAsync(o => o.Id == orderId);
+
+                // Log the update
+                if (orderAfter != null)
+                {
+                    try
+                    {
+                        await _auditService.LogUpdateAsync(orderBefore, orderAfter);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Audit logging failed: {ex.Message}");
+                    }
+                }
+
                 return Ok(order);
             }
             catch (Exception ex)
@@ -74,7 +103,59 @@ namespace DreamCleaningBackend.Controllers
             try
             {
                 var userId = GetUserId();
+
+                // Get the order before cancellation
+                var orderBefore = await _context.Orders.AsNoTracking()
+                    .FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
+
+                if (orderBefore == null)
+                    return NotFound();
+
+                // Call the service to cancel (which will now save the reason)
                 await _orderService.CancelOrder(orderId, userId, cancelOrderDto);
+
+                // Get the order after cancellation
+                var orderAfter = await _context.Orders
+                    .FirstOrDefaultAsync(o => o.Id == orderId);
+
+                // Log the update with cancellation reason
+                if (orderAfter != null)
+                {
+                    try
+                    {
+                        // Create a copy for audit that includes the cancellation reason
+                        var auditOrderBefore = new Order
+                        {
+                            Id = orderBefore.Id,
+                            Status = orderBefore.Status,
+                            CancellationReason = orderBefore.CancellationReason,
+                            UpdatedAt = orderBefore.UpdatedAt,
+                            UserId = orderBefore.UserId,
+                            Total = orderBefore.Total,
+                            ServiceDate = orderBefore.ServiceDate,
+                            ContactEmail = orderBefore.ContactEmail
+                        };
+
+                        var auditOrderAfter = new Order
+                        {
+                            Id = orderAfter.Id,
+                            Status = orderAfter.Status,
+                            CancellationReason = orderAfter.CancellationReason,
+                            UpdatedAt = orderAfter.UpdatedAt,
+                            UserId = orderAfter.UserId,
+                            Total = orderAfter.Total,
+                            ServiceDate = orderAfter.ServiceDate,
+                            ContactEmail = orderAfter.ContactEmail
+                        };
+
+                        await _auditService.LogUpdateAsync(auditOrderBefore, auditOrderAfter);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Audit logging failed: {ex.Message}");
+                    }
+                }
+
                 return Ok(new { message = "Order cancelled successfully. Refund will be processed within 7 working days." });
             }
             catch (Exception ex)

@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using DreamCleaningBackend.DTOs;
 using DreamCleaningBackend.Services.Interfaces;
+using DreamCleaningBackend.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace DreamCleaningBackend.Controllers
 {
@@ -12,10 +14,14 @@ namespace DreamCleaningBackend.Controllers
     public class ProfileController : ControllerBase
     {
         private readonly IProfileService _profileService;
+        private readonly IAuditService _auditService; 
+        private readonly ApplicationDbContext _context; 
 
-        public ProfileController(IProfileService profileService)
+        public ProfileController(IProfileService profileService, IAuditService auditService,  ApplicationDbContext context)
         {
             _profileService = profileService;
+            _auditService = auditService; 
+            _context = context; 
         }
 
         [HttpGet]
@@ -39,7 +45,35 @@ namespace DreamCleaningBackend.Controllers
             try
             {
                 var userId = GetUserId();
+
+                // Get the user before update for auditing
+                var userBeforeUpdate = await _context.Users.AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Id == userId);
+
+                if (userBeforeUpdate == null)
+                    return NotFound();
+
+                // Call the service to update
                 var profile = await _profileService.UpdateProfile(userId, updateProfileDto);
+
+                // Get the user after update for auditing
+                var userAfterUpdate = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Id == userId);
+
+                // Log the audit
+                if (userAfterUpdate != null)
+                {
+                    try
+                    {
+                        await _auditService.LogUpdateAsync(userBeforeUpdate, userAfterUpdate);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Don't fail the operation if audit fails
+                        Console.WriteLine($"Audit logging failed: {ex.Message}");
+                    }
+                }
+
                 return Ok(profile);
             }
             catch (Exception ex)
@@ -70,6 +104,23 @@ namespace DreamCleaningBackend.Controllers
             {
                 var userId = GetUserId();
                 var apartment = await _profileService.AddApartment(userId, createApartmentDto);
+
+                // Log the creation
+                try
+                {
+                    var createdApartment = await _context.Apartments
+                        .FirstOrDefaultAsync(a => a.Id == apartment.Id);
+
+                    if (createdApartment != null)
+                    {
+                        await _auditService.LogCreateAsync(createdApartment);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Audit logging failed: {ex.Message}");
+                }
+
                 return Ok(apartment);
             }
             catch (Exception ex)
@@ -78,13 +129,40 @@ namespace DreamCleaningBackend.Controllers
             }
         }
 
+
         [HttpPut("apartments/{apartmentId}")]
         public async Task<ActionResult<ApartmentDto>> UpdateApartment(int apartmentId, ApartmentDto apartmentDto)
         {
             try
             {
                 var userId = GetUserId();
+
+                // Get the apartment before update
+                var apartmentBefore = await _context.Apartments.AsNoTracking()
+                    .FirstOrDefaultAsync(a => a.Id == apartmentId && a.UserId == userId);
+
+                if (apartmentBefore == null)
+                    return NotFound();
+
                 var apartment = await _profileService.UpdateApartment(userId, apartmentId, apartmentDto);
+
+                // Get the apartment after update
+                var apartmentAfter = await _context.Apartments
+                    .FirstOrDefaultAsync(a => a.Id == apartmentId);
+
+                // Log the update
+                if (apartmentAfter != null)
+                {
+                    try
+                    {
+                        await _auditService.LogUpdateAsync(apartmentBefore, apartmentAfter);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Audit logging failed: {ex.Message}");
+                    }
+                }
+
                 return Ok(apartment);
             }
             catch (Exception ex)
@@ -99,7 +177,26 @@ namespace DreamCleaningBackend.Controllers
             try
             {
                 var userId = GetUserId();
+
+                // Get the apartment before deletion
+                var apartment = await _context.Apartments
+                    .FirstOrDefaultAsync(a => a.Id == apartmentId && a.UserId == userId);
+
+                if (apartment == null)
+                    return NotFound();
+
                 await _profileService.DeleteApartment(userId, apartmentId);
+
+                // Log the deletion
+                try
+                {
+                    await _auditService.LogDeleteAsync(apartment);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Audit logging failed: {ex.Message}");
+                }
+
                 return Ok(new { message = "Apartment deleted successfully" });
             }
             catch (Exception ex)
