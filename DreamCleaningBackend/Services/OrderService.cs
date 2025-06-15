@@ -97,8 +97,9 @@ namespace DreamCleaningBackend.Services
             Console.WriteLine($"Frontend sent TotalDuration: {updateOrderDto.TotalDuration} minutes");
             Console.WriteLine($"Current DB TotalDuration: {order.TotalDuration} minutes");
 
-            // Store the original total for comparison
+            // Store the original values
             var originalTotal = order.Total;
+            var originalGiftCardAmountUsed = order.GiftCardAmountUsed;
 
             // Log the original total
             Console.WriteLine($"Original total: ${originalTotal:F2}");
@@ -368,7 +369,92 @@ namespace DreamCleaningBackend.Services
             var totalDiscounts = order.DiscountAmount + (order.SubscriptionDiscountAmount == 0 ? 0 : order.SubscriptionDiscountAmount);
             var discountedSubTotal = newSubTotal - totalDiscounts;
             order.Tax = discountedSubTotal * 0.088m; // 8.8% tax
-            order.Total = discountedSubTotal + order.Tax + order.Tips;
+
+            // Calculate total BEFORE gift card
+            var totalBeforeGiftCard = discountedSubTotal + order.Tax + order.Tips;
+
+            // Handle gift card adjustment if there was a gift card applied
+            if (!string.IsNullOrEmpty(order.GiftCardCode) && originalGiftCardAmountUsed > 0)
+            {
+                Console.WriteLine($"\n=== GIFT CARD UPDATE ===");
+                Console.WriteLine($"Gift Card Code: {order.GiftCardCode}");
+                Console.WriteLine($"Original gift card amount used: ${originalGiftCardAmountUsed}");
+
+                // Get current gift card
+                var giftCard = await _context.GiftCards
+                    .FirstOrDefaultAsync(g => g.Code == order.GiftCardCode);
+
+                if (giftCard != null && giftCard.IsActive)
+                {
+                    // Calculate available balance (current balance + what was originally used)
+                    var availableBalance = giftCard.CurrentBalance + originalGiftCardAmountUsed;
+                    Console.WriteLine($"Available balance (including original): ${availableBalance}");
+
+                    // Calculate new gift card usage amount
+                    var newGiftCardAmountToUse = Math.Min(availableBalance, totalBeforeGiftCard);
+                    Console.WriteLine($"New gift card amount to use: ${newGiftCardAmountToUse}");
+
+                    // Calculate the difference
+                    var giftCardDifference = newGiftCardAmountToUse - originalGiftCardAmountUsed;
+                    Console.WriteLine($"Difference: ${giftCardDifference}");
+
+                    if (Math.Abs(giftCardDifference) > 0.01m) // Only update if there's a meaningful difference
+                    {
+                        // Update gift card balance
+                        giftCard.CurrentBalance = availableBalance - newGiftCardAmountToUse;
+                        Console.WriteLine($"New gift card balance: ${giftCard.CurrentBalance}");
+
+                        // Update order
+                        order.GiftCardAmountUsed = newGiftCardAmountToUse;
+                        order.Total = totalBeforeGiftCard - newGiftCardAmountToUse;
+
+                        // Find and update the existing gift card usage record
+                        var existingUsage = await _context.GiftCardUsages
+                            .FirstOrDefaultAsync(u => u.GiftCardId == giftCard.Id && u.OrderId == order.Id);
+
+                        if (existingUsage != null)
+                        {
+                            Console.WriteLine($"Updating existing GiftCardUsage record");
+                            // Update existing usage record
+                            existingUsage.AmountUsed = newGiftCardAmountToUse;
+                            existingUsage.BalanceAfterUsage = giftCard.CurrentBalance;
+                            existingUsage.UsedAt = DateTime.UtcNow; // Update timestamp
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Creating new GiftCardUsage record (this shouldn't normally happen)");
+                            // This shouldn't happen, but create a new usage record if needed
+                            var newUsage = new GiftCardUsage
+                            {
+                                GiftCardId = giftCard.Id,
+                                OrderId = order.Id,
+                                UserId = userId,
+                                AmountUsed = newGiftCardAmountToUse,
+                                BalanceAfterUsage = giftCard.CurrentBalance,
+                                UsedAt = DateTime.UtcNow
+                            };
+                            _context.GiftCardUsages.Add(newUsage);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"No significant gift card change, keeping original amount");
+                        order.Total = totalBeforeGiftCard - originalGiftCardAmountUsed;
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Gift card not found or inactive, keeping original calculation");
+                    order.Total = totalBeforeGiftCard - originalGiftCardAmountUsed;
+                }
+
+                Console.WriteLine($"=== END GIFT CARD UPDATE ===\n");
+            }
+            else
+            {
+                // No gift card applied
+                order.Total = totalBeforeGiftCard;
+            }
 
             // Final check to ensure the new total is not less than the original
             if (order.Total < originalTotal)
@@ -694,6 +780,8 @@ namespace DreamCleaningBackend.Services
                 PromoCode = order.PromoCode,
                 SubscriptionId = order.SubscriptionId,
                 SubscriptionName = order.Subscription?.Name ?? "",
+                GiftCardCode = order.GiftCardCode,
+                GiftCardAmountUsed = order.GiftCardAmountUsed,
                 EntryMethod = order.EntryMethod,
                 SpecialInstructions = order.SpecialInstructions,
                 ContactFirstName = order.ContactFirstName,
