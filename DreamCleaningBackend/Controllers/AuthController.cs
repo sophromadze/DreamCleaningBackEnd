@@ -60,20 +60,6 @@ namespace DreamCleaningBackend.Controllers
             }
         }
 
-        [HttpPost("apple-login")]
-        public async Task<ActionResult<AuthResponseDto>> AppleLogin(AppleLoginDto appleLoginDto)
-        {
-            try
-            {
-                var response = await _authService.AppleLogin(appleLoginDto);
-                return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-        }
-
         [HttpPost("refresh-token")]
         public async Task<ActionResult<AuthResponseDto>> RefreshToken(RefreshTokenDto refreshTokenDto)
         {
@@ -132,6 +118,78 @@ namespace DreamCleaningBackend.Controllers
                 }
 
                 var response = await _authService.RefreshUserToken(userId);
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("verify-email")]
+        public async Task<ActionResult> VerifyEmail(VerifyEmailDto verifyDto)
+        {
+            try
+            {
+                await _authService.VerifyEmail(verifyDto.Token);
+                return Ok(new { message = "Email verified successfully" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("resend-verification")]
+        [Authorize]
+        public async Task<ActionResult> ResendVerification()
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                await _authService.ResendVerificationEmail(userId);
+                return Ok(new { message = "Verification email sent" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("forgot-password")]
+        public async Task<ActionResult> ForgotPassword(ForgotPasswordDto forgotDto)
+        {
+            try
+            {
+                await _authService.InitiatePasswordReset(forgotDto.Email);
+                return Ok(new { message = "If an account exists, a reset link has been sent" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<ActionResult> ResetPassword(ResetPasswordDto resetDto)
+        {
+            try
+            {
+                await _authService.ResetPassword(resetDto);
+                return Ok(new { message = "Password reset successfully" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("facebook-login")]
+        public async Task<ActionResult<AuthResponseDto>> FacebookLogin(FacebookLoginDto facebookLoginDto)
+        {
+            try
+            {
+                var response = await _authService.FacebookLogin(facebookLoginDto);
                 return Ok(response);
             }
             catch (Exception ex)

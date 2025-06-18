@@ -4,6 +4,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using DreamCleaningBackend.Data;
 using DreamCleaningBackend.DTOs;
 using DreamCleaningBackend.Models;
@@ -16,11 +17,15 @@ namespace DreamCleaningBackend.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IEmailService _emailService;
+        private readonly ILogger<AuthService> _logger;
 
-        public AuthService(ApplicationDbContext context, IConfiguration configuration)
+        public AuthService(ApplicationDbContext context, IConfiguration configuration, IEmailService emailService, ILogger<AuthService> logger)
         {
             _context = context;
             _configuration = configuration;
+            _emailService = emailService;
+            _logger = logger;
         }
 
         public async Task<AuthResponseDto> Register(RegisterDto registerDto)
@@ -39,22 +44,30 @@ namespace DreamCleaningBackend.Services
                 PasswordHash = passwordHash,
                 PasswordSalt = passwordSalt,
                 AuthProvider = "Local",
-                CreatedAt = DateTime.UtcNow,
-                FirstTimeOrder = true
+                CreatedAt = DateTime.Now,
+                FirstTimeOrder = true,
+                IsEmailVerified = false,
+                EmailVerificationToken = GenerateVerificationToken(),
+                EmailVerificationTokenExpiry = DateTime.Now.AddHours(24)
             };
 
             // Generate refresh token
             user.RefreshToken = GenerateRefreshToken();
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7);
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
+
+            // Send verification email
+            var verificationLink = $"{_configuration["Frontend:Url"]}/auth/verify-email?token={user.EmailVerificationToken}";
+            await _emailService.SendEmailVerificationAsync(user.Email, user.FirstName, verificationLink);
 
             return new AuthResponseDto
             {
                 User = MapUserToDto(user),
                 Token = CreateToken(user),
-                RefreshToken = user.RefreshToken
+                RefreshToken = user.RefreshToken,
+                RequiresEmailVerification = true
             };
         }
 
@@ -73,9 +86,22 @@ namespace DreamCleaningBackend.Services
             if (!VerifyPasswordHash(loginDto.Password, user.PasswordHash, user.PasswordSalt))
                 throw new Exception("Invalid email or password");
 
+            // Check if email is verified
+            if (!user.IsEmailVerified)
+            {
+                return new AuthResponseDto
+                {
+                    User = MapUserToDto(user),
+                    Token = CreateToken(user),
+                    RefreshToken = user.RefreshToken,
+                    RequiresEmailVerification = true
+                };
+            }
+
             // Update refresh token
             user.RefreshToken = GenerateRefreshToken();
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7);
+            user.LastOrderDate = DateTime.Now;
             await _context.SaveChangesAsync();
 
             return new AuthResponseDto
@@ -144,19 +170,6 @@ namespace DreamCleaningBackend.Services
             {
                 throw new Exception($"Google login failed: {ex.Message}");
             }
-        }
-
-        public async Task<AuthResponseDto> AppleLogin(AppleLoginDto appleLoginDto)
-        {
-            // Apple login implementation would go here
-            // For now, throwing not implemented
-            throw new NotImplementedException("Apple login not yet implemented");
-
-            // In a real implementation, you would:
-            // 1. Validate Apple ID token
-            // 2. Extract user info
-            // 3. Create or update user
-            // 4. Return auth response
         }
 
         public async Task<AuthResponseDto> RefreshToken(RefreshTokenDto refreshTokenDto)
@@ -234,7 +247,6 @@ namespace DreamCleaningBackend.Services
             };
         }
 
-
         public async Task<bool> UserExists(string email)
         {
             return await _context.Users.AnyAsync(u => u.Email == email.ToLower());
@@ -310,8 +322,8 @@ namespace DreamCleaningBackend.Services
         new Claim(ClaimTypes.Name, $"{user.FirstName} {user.LastName}"),
         // IMPORTANT: Add both ClaimTypes.Role and custom "Role" claim
         new Claim(ClaimTypes.Role, user.Role.ToString()),
-        new Claim("Role", user.Role.ToString()), 
-        new Claim("UserId", user.Id.ToString()), 
+        new Claim("Role", user.Role.ToString()),
+        new Claim("UserId", user.Id.ToString()),
         new Claim("FirstName", user.FirstName),
         new Claim("LastName", user.LastName),
         new Claim("FirstTimeOrder", user.FirstTimeOrder.ToString()),
@@ -393,6 +405,189 @@ namespace DreamCleaningBackend.Services
                 AuthProvider = user.AuthProvider,
                 Role = user.Role.ToString()
             };
+        }
+
+        public async Task<bool> VerifyEmail(string token)
+        {
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.EmailVerificationToken == token
+                    && u.EmailVerificationTokenExpiry > DateTime.UtcNow);
+
+            if (user == null)
+                throw new Exception("Invalid or expired verification token");
+
+            user.IsEmailVerified = true;
+            user.EmailVerificationToken = null;
+            user.EmailVerificationTokenExpiry = null;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            // Send welcome email
+            await _emailService.SendWelcomeEmailAsync(user.Email, user.FirstName);
+
+            return true;
+        }
+
+        public async Task<bool> ResendVerificationEmail(int userId)
+        {
+            var user = await _context.Users.FindAsync(userId);
+
+            if (user == null)
+                throw new Exception("User not found");
+
+            if (user.IsEmailVerified)
+                throw new Exception("Email already verified");
+
+            // Generate new verification token
+            user.EmailVerificationToken = GenerateVerificationToken();
+            user.EmailVerificationTokenExpiry = DateTime.UtcNow.AddHours(24);
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            // Send verification email
+            var verificationLink = $"{_configuration["Frontend:Url"]}/auth/verify-email?token={user.EmailVerificationToken}";
+            await _emailService.SendEmailVerificationAsync(user.Email, user.FirstName, verificationLink);
+
+            return true;
+        }
+
+        public async Task<bool> InitiatePasswordReset(string email)
+        {
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.Email == email.ToLower());
+
+            if (user == null || user.AuthProvider != "Local")
+                return true; // Don't reveal if user exists
+
+            user.PasswordResetToken = GenerateVerificationToken();
+            user.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(1);
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            var resetLink = $"{_configuration["Frontend:Url"]}/auth/reset-password?token={user.PasswordResetToken}";
+            await _emailService.SendPasswordResetAsync(user.Email, user.FirstName, resetLink);
+
+            return true;
+        }
+
+        public async Task<bool> ResetPassword(ResetPasswordDto resetDto)
+        {
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.PasswordResetToken == resetDto.Token
+                    && u.PasswordResetTokenExpiry > DateTime.UtcNow);
+
+            if (user == null)
+                throw new Exception("Invalid or expired reset token");
+
+            CreatePasswordHash(resetDto.NewPassword, out string passwordHash, out string passwordSalt);
+
+            user.PasswordHash = passwordHash;
+            user.PasswordSalt = passwordSalt;
+            user.PasswordResetToken = null;
+            user.PasswordResetTokenExpiry = null;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<AuthResponseDto> FacebookLogin(FacebookLoginDto facebookLoginDto)
+        {
+            try
+            {
+                // Validate Facebook token
+                var fbUser = await ValidateFacebookToken(facebookLoginDto.AccessToken);
+
+                if (fbUser == null)
+                    throw new Exception("Invalid Facebook token");
+
+                var email = fbUser.Email?.ToLower();
+                if (string.IsNullOrEmpty(email))
+                    throw new Exception("Email not provided by Facebook");
+
+                // Check if user exists
+                var user = await _context.Users
+                    .Include(u => u.Subscription)
+                    .FirstOrDefaultAsync(u => u.Email == email);
+
+                if (user == null)
+                {
+                    // Create new user
+                    user = new User
+                    {
+                        Email = email,
+                        FirstName = fbUser.FirstName ?? "User",
+                        LastName = fbUser.LastName ?? "",
+                        AuthProvider = "Facebook",
+                        ExternalAuthId = fbUser.Id,
+                        CreatedAt = DateTime.UtcNow,
+                        FirstTimeOrder = true,
+                        IsActive = true,
+                        IsEmailVerified = true // Facebook emails are pre-verified
+                    };
+
+                    _context.Users.Add(user);
+                }
+                else if (user.AuthProvider != "Facebook")
+                {
+                    throw new Exception("Email already registered with different provider");
+                }
+
+                // Update refresh token
+                user.RefreshToken = GenerateRefreshToken();
+                user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+                await _context.SaveChangesAsync();
+
+                return new AuthResponseDto
+                {
+                    User = MapUserToDto(user),
+                    Token = CreateToken(user),
+                    RefreshToken = user.RefreshToken
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Facebook login failed");
+                throw new Exception($"Facebook login failed: {ex.Message}");
+            }
+        }
+
+        // Add helper method to generate verification tokens
+        private string GenerateVerificationToken()
+        {
+            var randomNumber = new byte[32];
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(randomNumber);
+                return Convert.ToBase64String(randomNumber)
+                    .Replace("+", "")
+                    .Replace("/", "")
+                    .Replace("=", "");
+            }
+        }
+
+        // Add helper method to validate Facebook token
+        private async Task<FacebookUserInfo> ValidateFacebookToken(string accessToken)
+        {
+            using var client = new HttpClient();
+            var response = await client.GetAsync(
+                $"https://graph.facebook.com/me?fields=id,email,first_name,last_name&access_token={accessToken}"
+            );
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<FacebookUserInfo>(content, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+            }
+
+            return null;
         }
     }
 }
