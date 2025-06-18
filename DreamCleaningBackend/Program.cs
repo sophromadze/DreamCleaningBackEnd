@@ -8,6 +8,7 @@ using DreamCleaningBackend.Services.Interfaces;
 using DreamCleaningBackend.Repositories.Interfaces;
 using DreamCleaningBackend.Repositories;
 using DreamCleaningBackend.Hubs;
+using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,7 +25,18 @@ builder.Services.AddSignalR();
 
 // Database Configuration
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    var serverVersion = new MariaDbServerVersion(new Version(10, 9, 8));
+
+    options.UseMySql(connectionString, serverVersion,
+        mySqlOptions => mySqlOptions
+            .EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(10),
+                errorNumbersToAdd: null)
+    );
+});
 
 // Authentication Configuration - UPDATED FOR SIGNALR
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -89,6 +101,20 @@ builder.Services.AddCors(options =>
                    .AllowAnyMethod()
                    .AllowCredentials();
         });
+
+    // Add production policy
+    options.AddPolicy("ProductionPolicy",
+        policy =>
+        {
+            policy.WithOrigins(
+                    builder.Configuration["Frontend:Url"],
+                    "https://themarvelouscleaning.com",
+                    "https://www.themarvelouscleaning.com"
+                )
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        });
 });
 
 var app = builder.Build();
@@ -108,7 +134,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseCors("AllowAngularApp");
+app.UseCors(app.Environment.IsDevelopment() ? "AllowAngularApp" : "ProductionPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
@@ -118,5 +144,25 @@ app.MapHub<UserManagementHub>("/userManagementHub");
 
 // Add logging to see if hub is registered
 Console.WriteLine("SignalR Hub mapped to: /userManagementHub");
+
+// Force HTTPS in production
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+    app.UseHsts();
+}
+
+// Add security headers
+app.Use(async (context, next) =>
+{
+    if (!app.Environment.IsDevelopment())
+    {
+        context.Response.Headers.Add("X-Content-Type-Options", "nosniff");
+        context.Response.Headers.Add("X-Frame-Options", "DENY");
+        context.Response.Headers.Add("X-XSS-Protection", "1; mode=block");
+        context.Response.Headers.Add("Referrer-Policy", "strict-origin-when-cross-origin");
+    }
+    await next();
+});
 
 app.Run();
