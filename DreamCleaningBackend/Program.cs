@@ -29,13 +29,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
     var serverVersion = new MariaDbServerVersion(new Version(10, 9, 8));
 
-    options.UseMySql(connectionString, serverVersion,
-        mySqlOptions => mySqlOptions
-            .EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(10),
-                errorNumbersToAdd: null)
-    );
+    options.UseMySql(connectionString, serverVersion);
 });
 
 // Authentication Configuration - UPDATED FOR SIGNALR
