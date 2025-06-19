@@ -9,6 +9,8 @@ using DreamCleaningBackend.Repositories.Interfaces;
 using DreamCleaningBackend.Repositories;
 using DreamCleaningBackend.Hubs;
 using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
+using MySqlConnector;
+using Microsoft.AspNetCore.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -103,7 +105,9 @@ builder.Services.AddCors(options =>
             policy.WithOrigins(
                     builder.Configuration["Frontend:Url"],
                     "https://themarvelouscleaning.com",
-                    "https://www.themarvelouscleaning.com"
+                    "http://themarvelouscleaning.com",
+                    "https://www.themarvelouscleaning.com",
+                    "http://www.themarvelouscleaning.com"
                 )
                 .AllowAnyHeader()
                 .AllowAnyMethod()
@@ -113,11 +117,40 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Get logger
+var logger = app.Services.GetRequiredService<ILogger<Program>>();
+
 // Apply migrations automatically
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    context.Database.Migrate();
+
+    try
+    {
+        // Check if database exists and can connect
+        if (await context.Database.CanConnectAsync())
+        {
+            // Get pending migrations
+            var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
+
+            if (pendingMigrations.Any())
+            {
+                await context.Database.MigrateAsync();
+            }
+        }
+    }
+    catch (MySqlException ex) when (ex.Message.Contains("already exists"))
+    {
+        Console.WriteLine("Database tables already exist. Skipping migration.");
+
+        // Ensure the migration history is updated
+        var appliedMigrations = await context.Database.GetAppliedMigrationsAsync();
+        if (!appliedMigrations.Contains("20250618161603_InitialCreate"))
+        {
+            // The tables exist but migration history is missing
+            Console.WriteLine("Warning: Tables exist but migration history is incomplete.");
+        }
+    }
 }
 
 // Configure the HTTP request pipeline.
@@ -127,8 +160,37 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// REMOVE THIS FIRST HTTPS REDIRECTION - Nginx handles SSL
+// app.UseHttpsRedirection();
+
 app.UseCors(app.Environment.IsDevelopment() ? "AllowAngularApp" : "ProductionPolicy");
+
+// Add exception handling
+app.UseExceptionHandler(appError =>
+{
+    appError.Run(async context =>
+    {
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json";
+
+        var contextFeature = context.Features.Get<IExceptionHandlerFeature>();
+        if (contextFeature != null)
+        {
+            logger.LogError($"Error: {contextFeature.Error}");
+
+            await context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new
+            {
+                StatusCode = context.Response.StatusCode,
+                Message = "Internal Server Error",
+                Detailed = app.Environment.IsDevelopment() ? contextFeature.Error?.StackTrace : null
+            }));
+        }
+    });
+});
+
+Console.WriteLine("Using DB: " + builder.Configuration.GetConnectionString("DefaultConnection"));
+
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
@@ -139,12 +201,15 @@ app.MapHub<UserManagementHub>("/userManagementHub");
 // Add logging to see if hub is registered
 Console.WriteLine("SignalR Hub mapped to: /userManagementHub");
 
+// REMOVE THIS ENTIRE SECTION - Not needed since Nginx handles HTTPS
+/*
 // Force HTTPS in production
 if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
     app.UseHsts();
 }
+*/
 
 // Add security headers
 app.Use(async (context, next) =>

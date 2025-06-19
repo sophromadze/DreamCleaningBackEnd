@@ -19,13 +19,13 @@ namespace DreamCleaningBackend.Models
         [StringLength(20)]
         public string Action { get; set; } // "Create", "Update", "Delete"
 
-        [Column(TypeName = "nvarchar(max)")]
+        [Column(TypeName = "LONGTEXT")]
         public string? OldValues { get; set; } // What it was before (as JSON)
 
-        [Column(TypeName = "nvarchar(max)")]
+        [Column(TypeName = "LONGTEXT")]
         public string? NewValues { get; set; } // What it is now (as JSON)
 
-        [Column(TypeName = "nvarchar(max)")]
+        [Column(TypeName = "LONGTEXT")]
         public string? ChangedFields { get; set; } // Which fields changed (as JSON)
 
         public int? UserId { get; set; } // Who made the change

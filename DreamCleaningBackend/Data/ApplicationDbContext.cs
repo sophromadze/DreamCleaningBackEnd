@@ -244,7 +244,7 @@ namespace DreamCleaningBackend.Data
                     .HasMaxLength(100);
 
                 entity.Property(e => e.CreatedAt)
-                    .HasDefaultValueSql("GETUTCDATE()");
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                 // Foreign key relationships
                 entity.HasOne(e => e.PurchasedByUser)
@@ -269,7 +269,7 @@ namespace DreamCleaningBackend.Data
                     .IsRequired();
 
                 entity.Property(e => e.UsedAt)
-                    .HasDefaultValueSql("GETUTCDATE()");
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                 // Foreign key relationships
                 entity.HasOne(e => e.GiftCard)

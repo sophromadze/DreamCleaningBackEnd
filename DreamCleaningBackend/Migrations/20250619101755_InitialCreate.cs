@@ -270,9 +270,12 @@ namespace DreamCleaningBackend.Migrations
                     EntityId = table.Column<long>(type: "bigint", nullable: false),
                     Action = table.Column<string>(type: "varchar(20)", maxLength: 20, nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
-                    OldValues = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    NewValues = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    ChangedFields = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    OldValues = table.Column<string>(type: "LONGTEXT", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    NewValues = table.Column<string>(type: "LONGTEXT", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    ChangedFields = table.Column<string>(type: "LONGTEXT", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
                     UserId = table.Column<int>(type: "int", nullable: true),
                     IpAddress = table.Column<string>(type: "varchar(45)", maxLength: 45, nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
@@ -317,7 +320,7 @@ namespace DreamCleaningBackend.Migrations
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     IsPaid = table.Column<bool>(type: "tinyint(1)", nullable: false),
                     PaidAt = table.Column<DateTime>(type: "datetime(6)", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false, defaultValueSql: "GETUTCDATE()"),
+                    CreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP"),
                     UpdatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: true)
                 },
                 constraints: table =>
@@ -434,7 +437,7 @@ namespace DreamCleaningBackend.Migrations
                     UserId = table.Column<int>(type: "int", nullable: false),
                     AmountUsed = table.Column<decimal>(type: "decimal(10,2)", nullable: false),
                     BalanceAfterUsage = table.Column<decimal>(type: "decimal(10,2)", nullable: false),
-                    UsedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false, defaultValueSql: "GETUTCDATE()")
+                    UsedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false, defaultValueSql: "CURRENT_TIMESTAMP")
                 },
                 constraints: table =>
                 {
@@ -529,14 +532,14 @@ namespace DreamCleaningBackend.Migrations
                 columns: new[] { "Id", "CreatedAt", "Description", "DisplayOrder", "Duration", "HasHours", "HasQuantity", "Icon", "IsActive", "IsAvailableForAll", "IsDeepCleaning", "IsSameDayService", "IsSuperDeepCleaning", "Name", "Price", "PriceMultiplier", "ServiceTypeId", "UpdatedAt" },
                 values: new object[,]
                 {
-                    { 1, new DateTime(2025, 6, 18, 16, 16, 3, 37, DateTimeKind.Utc).AddTicks(8200), "Thorough cleaning of all surfaces and hard-to-reach areas", 1, 60, false, false, "deep-cleaning.png", true, true, true, false, false, "Deep Cleaning", 50m, 1.5m, null, null },
-                    { 2, new DateTime(2025, 6, 18, 16, 16, 3, 37, DateTimeKind.Utc).AddTicks(8204), "Most intensive cleaning service available", 2, 120, false, false, "super-deep-cleaning.png", true, true, false, false, true, "Super Deep Cleaning", 100m, 2.0m, null, null },
-                    { 3, new DateTime(2025, 6, 18, 16, 16, 3, 37, DateTimeKind.Utc).AddTicks(8208), "Get your cleaning done today", 3, 0, false, false, "same-day.png", true, true, false, true, false, "Same Day Service", 75m, 1.0m, null, null },
-                    { 4, new DateTime(2025, 6, 18, 16, 16, 3, 37, DateTimeKind.Utc).AddTicks(8211), "Interior window cleaning", 4, 20, false, true, "window-cleaning.png", true, true, false, false, false, "Window Cleaning", 15m, 1.0m, null, null },
-                    { 5, new DateTime(2025, 6, 18, 16, 16, 3, 37, DateTimeKind.Utc).AddTicks(8249), "Spot cleaning of walls", 5, 30, false, true, "wall-cleaning.png", true, true, false, false, false, "Wall Cleaning", 20m, 1.0m, null, null },
-                    { 6, new DateTime(2025, 6, 18, 16, 16, 3, 37, DateTimeKind.Utc).AddTicks(8251), "Professional organizing of your space", 6, 30, true, false, "organizing.png", true, true, false, false, false, "Organizing Service", 30m, 1.0m, null, null },
-                    { 8, new DateTime(2025, 6, 18, 16, 16, 3, 37, DateTimeKind.Utc).AddTicks(8256), "Deep cleaning inside and outside", 8, 30, false, false, "fridge-cleaning.png", true, true, false, false, false, "Refrigerator Cleaning", 35m, 1.0m, null, null },
-                    { 9, new DateTime(2025, 6, 18, 16, 16, 3, 37, DateTimeKind.Utc).AddTicks(8258), "Deep cleaning of oven interior", 9, 45, false, false, "oven-cleaning.png", true, true, false, false, false, "Oven Cleaning", 40m, 1.0m, null, null }
+                    { 1, new DateTime(2025, 6, 19, 10, 17, 55, 120, DateTimeKind.Utc).AddTicks(852), "Thorough cleaning of all surfaces and hard-to-reach areas", 1, 60, false, false, "deep-cleaning.png", true, true, true, false, false, "Deep Cleaning", 50m, 1.5m, null, null },
+                    { 2, new DateTime(2025, 6, 19, 10, 17, 55, 120, DateTimeKind.Utc).AddTicks(855), "Most intensive cleaning service available", 2, 120, false, false, "super-deep-cleaning.png", true, true, false, false, true, "Super Deep Cleaning", 100m, 2.0m, null, null },
+                    { 3, new DateTime(2025, 6, 19, 10, 17, 55, 120, DateTimeKind.Utc).AddTicks(858), "Get your cleaning done today", 3, 0, false, false, "same-day.png", true, true, false, true, false, "Same Day Service", 75m, 1.0m, null, null },
+                    { 4, new DateTime(2025, 6, 19, 10, 17, 55, 120, DateTimeKind.Utc).AddTicks(860), "Interior window cleaning", 4, 20, false, true, "window-cleaning.png", true, true, false, false, false, "Window Cleaning", 15m, 1.0m, null, null },
+                    { 5, new DateTime(2025, 6, 19, 10, 17, 55, 120, DateTimeKind.Utc).AddTicks(862), "Spot cleaning of walls", 5, 30, false, true, "wall-cleaning.png", true, true, false, false, false, "Wall Cleaning", 20m, 1.0m, null, null },
+                    { 6, new DateTime(2025, 6, 19, 10, 17, 55, 120, DateTimeKind.Utc).AddTicks(864), "Professional organizing of your space", 6, 30, true, false, "organizing.png", true, true, false, false, false, "Organizing Service", 30m, 1.0m, null, null },
+                    { 8, new DateTime(2025, 6, 19, 10, 17, 55, 120, DateTimeKind.Utc).AddTicks(870), "Deep cleaning inside and outside", 8, 30, false, false, "fridge-cleaning.png", true, true, false, false, false, "Refrigerator Cleaning", 35m, 1.0m, null, null },
+                    { 9, new DateTime(2025, 6, 19, 10, 17, 55, 120, DateTimeKind.Utc).AddTicks(872), "Deep cleaning of oven interior", 9, 45, false, false, "oven-cleaning.png", true, true, false, false, false, "Oven Cleaning", 40m, 1.0m, null, null }
                 });
 
             migrationBuilder.InsertData(
@@ -544,8 +547,8 @@ namespace DreamCleaningBackend.Migrations
                 columns: new[] { "Id", "BasePrice", "CreatedAt", "Description", "DisplayOrder", "IsActive", "Name", "UpdatedAt" },
                 values: new object[,]
                 {
-                    { 1, 120m, new DateTime(2025, 6, 18, 16, 16, 3, 36, DateTimeKind.Utc).AddTicks(8759), "Complete home cleaning service", 1, true, "Residential Cleaning", null },
-                    { 2, 200m, new DateTime(2025, 6, 18, 16, 16, 3, 36, DateTimeKind.Utc).AddTicks(8765), "Professional office cleaning service", 2, true, "Office Cleaning", null }
+                    { 1, 120m, new DateTime(2025, 6, 19, 10, 17, 55, 119, DateTimeKind.Utc).AddTicks(813), "Complete home cleaning service", 1, true, "Residential Cleaning", null },
+                    { 2, 200m, new DateTime(2025, 6, 19, 10, 17, 55, 119, DateTimeKind.Utc).AddTicks(815), "Professional office cleaning service", 2, true, "Office Cleaning", null }
                 });
 
             migrationBuilder.InsertData(
@@ -553,27 +556,27 @@ namespace DreamCleaningBackend.Migrations
                 columns: new[] { "Id", "CreatedAt", "Description", "DiscountPercentage", "DisplayOrder", "IsActive", "Name", "SubscriptionDays", "UpdatedAt" },
                 values: new object[,]
                 {
-                    { 1, new DateTime(2025, 6, 18, 16, 16, 3, 36, DateTimeKind.Utc).AddTicks(8535), "Single cleaning service", 0m, 1, true, "One Time", 0, null },
-                    { 2, new DateTime(2025, 6, 18, 16, 16, 3, 36, DateTimeKind.Utc).AddTicks(8540), "Cleaning every week", 15m, 2, true, "Weekly", 7, null },
-                    { 3, new DateTime(2025, 6, 18, 16, 16, 3, 36, DateTimeKind.Utc).AddTicks(8587), "Cleaning every two weeks", 10m, 3, true, "Bi-Weekly", 14, null },
-                    { 4, new DateTime(2025, 6, 18, 16, 16, 3, 36, DateTimeKind.Utc).AddTicks(8589), "Cleaning once a month", 5m, 4, true, "Monthly", 30, null }
+                    { 1, new DateTime(2025, 6, 19, 10, 17, 55, 119, DateTimeKind.Utc).AddTicks(623), "Single cleaning service", 0m, 1, true, "One Time", 0, null },
+                    { 2, new DateTime(2025, 6, 19, 10, 17, 55, 119, DateTimeKind.Utc).AddTicks(629), "Cleaning every week", 15m, 2, true, "Weekly", 7, null },
+                    { 3, new DateTime(2025, 6, 19, 10, 17, 55, 119, DateTimeKind.Utc).AddTicks(631), "Cleaning every two weeks", 10m, 3, true, "Bi-Weekly", 14, null },
+                    { 4, new DateTime(2025, 6, 19, 10, 17, 55, 119, DateTimeKind.Utc).AddTicks(633), "Cleaning once a month", 5m, 4, true, "Monthly", 30, null }
                 });
 
             migrationBuilder.InsertData(
                 table: "ExtraServices",
                 columns: new[] { "Id", "CreatedAt", "Description", "DisplayOrder", "Duration", "HasHours", "HasQuantity", "Icon", "IsActive", "IsAvailableForAll", "IsDeepCleaning", "IsSameDayService", "IsSuperDeepCleaning", "Name", "Price", "PriceMultiplier", "ServiceTypeId", "UpdatedAt" },
-                values: new object[] { 7, new DateTime(2025, 6, 18, 16, 16, 3, 37, DateTimeKind.Utc).AddTicks(8254), "Washing and folding service", 7, 45, false, true, "laundry.png", true, false, false, false, false, "Laundry Service", 25m, 1.0m, 1, null });
+                values: new object[] { 7, new DateTime(2025, 6, 19, 10, 17, 55, 120, DateTimeKind.Utc).AddTicks(868), "Washing and folding service", 7, 45, false, true, "laundry.png", true, false, false, false, false, "Laundry Service", 25m, 1.0m, 1, null });
 
             migrationBuilder.InsertData(
                 table: "Services",
                 columns: new[] { "Id", "Cost", "CreatedAt", "DisplayOrder", "InputType", "IsActive", "IsRangeInput", "MaxValue", "MinValue", "Name", "ServiceKey", "ServiceRelationType", "ServiceTypeId", "StepValue", "TimeDuration", "Unit", "UpdatedAt" },
                 values: new object[,]
                 {
-                    { 1, 25m, new DateTime(2025, 6, 18, 16, 16, 3, 37, DateTimeKind.Utc).AddTicks(8123), 1, "dropdown", true, false, 6, 0, "Bedrooms", "bedrooms", null, 1, 1, 30, null, null },
-                    { 2, 35m, new DateTime(2025, 6, 18, 16, 16, 3, 37, DateTimeKind.Utc).AddTicks(8129), 2, "dropdown", true, false, 5, 1, "Bathrooms", "bathrooms", null, 1, 1, 45, null, null },
-                    { 3, 0.10m, new DateTime(2025, 6, 18, 16, 16, 3, 37, DateTimeKind.Utc).AddTicks(8133), 3, "slider", true, true, 5000, 400, "Square Feet", "sqft", null, 1, 100, 1, "per sqft", null },
-                    { 4, 40m, new DateTime(2025, 6, 18, 16, 16, 3, 37, DateTimeKind.Utc).AddTicks(8166), 1, "dropdown", true, false, 10, 1, "Cleaners", "cleaners", "cleaner", 2, 1, 0, "per hour", null },
-                    { 5, 0m, new DateTime(2025, 6, 18, 16, 16, 3, 37, DateTimeKind.Utc).AddTicks(8169), 2, "dropdown", true, false, 8, 2, "Hours", "hours", "hours", 2, 1, 60, null, null }
+                    { 1, 25m, new DateTime(2025, 6, 19, 10, 17, 55, 120, DateTimeKind.Utc).AddTicks(693), 1, "dropdown", true, false, 6, 0, "Bedrooms", "bedrooms", null, 1, 1, 30, null, null },
+                    { 2, 35m, new DateTime(2025, 6, 19, 10, 17, 55, 120, DateTimeKind.Utc).AddTicks(697), 2, "dropdown", true, false, 5, 1, "Bathrooms", "bathrooms", null, 1, 1, 45, null, null },
+                    { 3, 0.10m, new DateTime(2025, 6, 19, 10, 17, 55, 120, DateTimeKind.Utc).AddTicks(704), 3, "slider", true, true, 5000, 400, "Square Feet", "sqft", null, 1, 100, 1, "per sqft", null },
+                    { 4, 40m, new DateTime(2025, 6, 19, 10, 17, 55, 120, DateTimeKind.Utc).AddTicks(815), 1, "dropdown", true, false, 10, 1, "Cleaners", "cleaners", "cleaner", 2, 1, 0, "per hour", null },
+                    { 5, 0m, new DateTime(2025, 6, 19, 10, 17, 55, 120, DateTimeKind.Utc).AddTicks(818), 2, "dropdown", true, false, 8, 2, "Hours", "hours", "hours", 2, 1, 60, null, null }
                 });
 
             migrationBuilder.CreateIndex(
