@@ -28,50 +28,70 @@ namespace DreamCleaningBackend.Services
             _logger = logger;
         }
 
+        // Update your AuthService.cs Register method with better error handling
+
         public async Task<AuthResponseDto> Register(RegisterDto registerDto)
         {
-            if (await UserExists(registerDto.Email))
-                throw new Exception("User already exists");
-
-            CreatePasswordHash(registerDto.Password, out string passwordHash, out string passwordSalt);
-
-            var user = new User
+            try
             {
-                FirstName = registerDto.FirstName,
-                LastName = registerDto.LastName,
-                Email = registerDto.Email.ToLower(),
-                Phone = registerDto.Phone,
-                PasswordHash = passwordHash,
-                PasswordSalt = passwordSalt,
-                AuthProvider = "Local",
-                CreatedAt = DateTime.Now,
-                FirstTimeOrder = true,
-                IsEmailVerified = false,
-                EmailVerificationToken = GenerateVerificationToken(),
-                EmailVerificationTokenExpiry = DateTime.Now.AddHours(24)
-            };
+                if (await UserExists(registerDto.Email))
+                    throw new Exception("User already exists");
 
-            // Generate refresh token
-            user.RefreshToken = GenerateRefreshToken();
-            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7);
+                CreatePasswordHash(registerDto.Password, out string passwordHash, out string passwordSalt);
 
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+                var user = new User
+                {
+                    FirstName = registerDto.FirstName,
+                    LastName = registerDto.LastName,
+                    Email = registerDto.Email.ToLower(),
+                    Phone = registerDto.Phone,
+                    PasswordHash = passwordHash,
+                    PasswordSalt = passwordSalt,
+                    AuthProvider = "Local",
+                    CreatedAt = DateTime.Now,
+                    FirstTimeOrder = true,
+                    IsEmailVerified = false,
+                    EmailVerificationToken = GenerateVerificationToken(),
+                    EmailVerificationTokenExpiry = DateTime.Now.AddHours(24)
+                };
 
-            // Send verification email
-            var verificationLink = $"{_configuration["Frontend:Url"]}/auth/verify-email?token={user.EmailVerificationToken}";
-            await _emailService.SendEmailVerificationAsync(user.Email, user.FirstName, verificationLink);
+                _context.Users.Add(user);
+                await _context.SaveChangesAsync();
 
-            return new AuthResponseDto
+                try
+                {
+                    // Send verification email
+                    var verificationLink = $"{_configuration["Frontend:Url"]}/auth/verify-email?token={user.EmailVerificationToken}";
+                    await _emailService.SendEmailVerificationAsync(user.Email, user.FirstName, verificationLink);
+                }
+                catch (Exception emailEx)
+                {
+                    _logger.LogError(emailEx, "Failed to send verification email to {Email}", user.Email);
+
+                    // Delete the user if email sending fails
+                    _context.Users.Remove(user);
+                    await _context.SaveChangesAsync();
+
+                    throw new Exception("Failed to send verification email. Please check your email address and try again.");
+                }
+
+                // Return response WITHOUT token - user must verify email first
+                return new AuthResponseDto
+                {
+                    User = MapUserToDto(user),
+                    Token = null, // No token until email is verified
+                    RefreshToken = null, // No refresh token until email is verified
+                    RequiresEmailVerification = true
+                };
+            }
+            catch (Exception ex)
             {
-                User = MapUserToDto(user),
-                Token = CreateToken(user),
-                RefreshToken = user.RefreshToken,
-                RequiresEmailVerification = true
-            };
+                _logger.LogError(ex, "Registration failed for email: {Email}", registerDto.Email);
+                throw;
+            }
         }
 
-        public async Task<AuthResponseDto> Login(LoginDto loginDto)
+         public async Task<AuthResponseDto> Login(LoginDto loginDto)
         {
             var user = await _context.Users
                 .Include(u => u.Subscription)
@@ -89,19 +109,16 @@ namespace DreamCleaningBackend.Services
             // Check if email is verified
             if (!user.IsEmailVerified)
             {
-                return new AuthResponseDto
-                {
-                    User = MapUserToDto(user),
-                    Token = CreateToken(user),
-                    RefreshToken = user.RefreshToken,
-                    RequiresEmailVerification = true
-                };
+                throw new Exception("Please verify your email before logging in. Check your inbox for the verification link.");
             }
 
             // Update refresh token
             user.RefreshToken = GenerateRefreshToken();
             user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7);
-            user.LastOrderDate = DateTime.Now;
+
+            // Update the UpdatedAt field instead of LastLogin (which doesn't exist)
+            user.UpdatedAt = DateTime.Now;
+
             await _context.SaveChangesAsync();
 
             return new AuthResponseDto
@@ -429,15 +446,15 @@ namespace DreamCleaningBackend.Services
             return true;
         }
 
-        public async Task<bool> ResendVerificationEmail(int userId)
+        public async Task<bool> ResendVerificationEmail(string email)
         {
-            var user = await _context.Users.FindAsync(userId);
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.Email == email.ToLower()
+                    && !u.IsEmailVerified
+                    && u.AuthProvider == "Local");
 
             if (user == null)
-                throw new Exception("User not found");
-
-            if (user.IsEmailVerified)
-                throw new Exception("Email already verified");
+                return false; // Don't throw exception - for security
 
             // Generate new verification token
             user.EmailVerificationToken = GenerateVerificationToken();

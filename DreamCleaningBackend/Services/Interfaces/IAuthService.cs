@@ -14,7 +14,7 @@ namespace DreamCleaningBackend.Services.Interfaces
         Task<AuthResponseDto> RefreshUserToken(int userId);
         Task<bool> ChangePassword(int userId, ChangePasswordDto changePasswordDto);
         Task<bool> VerifyEmail(string token);
-        Task<bool> ResendVerificationEmail(int userId);
+        Task<bool> ResendVerificationEmail(string email);
         Task<bool> InitiatePasswordReset(string email);
         Task<bool> ResetPassword(ResetPasswordDto resetDto);
     }

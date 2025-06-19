@@ -4,9 +4,17 @@ using System.Security.Claims;
 using DreamCleaningBackend.DTOs;
 using DreamCleaningBackend.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 
 namespace DreamCleaningBackend.Controllers
 {
+    public class ResendVerificationDto
+    {
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; }
+    }
+
     [Route("api/[controller]")]
     [ApiController]
     public class AuthController : ControllerBase
@@ -141,18 +149,18 @@ namespace DreamCleaningBackend.Controllers
         }
 
         [HttpPost("resend-verification")]
-        [Authorize]
-        public async Task<ActionResult> ResendVerification()
+        public async Task<ActionResult> ResendVerification(ResendVerificationDto dto)
         {
             try
             {
-                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
-                await _authService.ResendVerificationEmail(userId);
-                return Ok(new { message = "Verification email sent" });
+                await _authService.ResendVerificationEmail(dto.Email);
+                // Always return same message for security
+                return Ok(new { message = "If an account exists with this email, a verification email has been sent." });
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = ex.Message });
+                // Don't reveal actual error
+                return Ok(new { message = "If an account exists with this email, a verification email has been sent." });
             }
         }
 

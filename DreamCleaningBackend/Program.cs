@@ -84,6 +84,7 @@ builder.Services.AddScoped<IUserManagementService, UserManagementService>();
 builder.Services.AddScoped<IGiftCardService, GiftCardService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddHostedService<UnverifiedUserCleanupService>();
 
 
 // CORS Configuration
