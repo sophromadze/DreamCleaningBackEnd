@@ -46,7 +46,7 @@ namespace DreamCleaningBackend.Services
             // 1. Are not email verified
             // 2. Were created more than 1 hour ago
             // 3. Are using local auth (not social login)
-            var cutoffTime = DateTime.UtcNow.AddHours(-1);
+            var cutoffTime = DateTime.Now.AddHours(-1);
 
             var unverifiedUsers = await context.Users
                 .Where(u => !u.IsEmailVerified

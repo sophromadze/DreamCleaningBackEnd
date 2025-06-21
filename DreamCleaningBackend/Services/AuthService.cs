@@ -19,13 +19,15 @@ namespace DreamCleaningBackend.Services
         private readonly IConfiguration _configuration;
         private readonly IEmailService _emailService;
         private readonly ILogger<AuthService> _logger;
+        private readonly ISpecialOfferService _specialOfferService;
 
-        public AuthService(ApplicationDbContext context, IConfiguration configuration, IEmailService emailService, ILogger<AuthService> logger)
+        public AuthService(ApplicationDbContext context, IConfiguration configuration, IEmailService emailService, ILogger<AuthService> logger, ISpecialOfferService specialOfferService)
         {
             _context = context;
             _configuration = configuration;
             _emailService = emailService;
             _logger = logger;
+            _specialOfferService = specialOfferService;
         }
 
         // Update your AuthService.cs Register method with better error handling
@@ -57,6 +59,16 @@ namespace DreamCleaningBackend.Services
 
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
+
+                try
+                {
+                    await _specialOfferService.GrantFirstTimeOfferIfEligible(user.Id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to grant first-time offer to user {UserId}", user.Id);
+                    // Don't fail registration if special offer fails
+                }
 
                 try
                 {
@@ -114,7 +126,7 @@ namespace DreamCleaningBackend.Services
 
             // Update refresh token
             user.RefreshToken = GenerateRefreshToken();
-            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(30);
 
             // Update the UpdatedAt field instead of LastLogin (which doesn't exist)
             user.UpdatedAt = DateTime.Now;
@@ -159,7 +171,7 @@ namespace DreamCleaningBackend.Services
                         LastName = lastName,
                         AuthProvider = "Google",
                         ExternalAuthId = googleId,
-                        CreatedAt = DateTime.UtcNow,
+                        CreatedAt = DateTime.Now,
                         FirstTimeOrder = true,
                         IsActive = true
                     };
@@ -173,8 +185,18 @@ namespace DreamCleaningBackend.Services
 
                 // Update refresh token
                 user.RefreshToken = GenerateRefreshToken();
-                user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+                user.RefreshTokenExpiryTime = DateTime.Now.AddDays(30);
                 await _context.SaveChangesAsync();
+
+                try
+                {
+                    await _specialOfferService.GrantFirstTimeOfferIfEligible(user.Id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to grant first-time offer to user {UserId}", user.Id);
+                    // Don't fail registration if special offer fails
+                }
 
                 return new AuthResponseDto
                 {
@@ -191,37 +213,58 @@ namespace DreamCleaningBackend.Services
 
         public async Task<AuthResponseDto> RefreshToken(RefreshTokenDto refreshTokenDto)
         {
-            var principal = GetPrincipalFromExpiredToken(refreshTokenDto.Token);
-            var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (string.IsNullOrEmpty(userId))
-                throw new Exception("Invalid token");
-
-            var user = await _context.Users
-                .Include(u => u.Subscription)
-                .FirstOrDefaultAsync(u => u.Id == int.Parse(userId));
-
-            if (user == null ||
-                user.RefreshToken != refreshTokenDto.RefreshToken ||
-                user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+            try
             {
-                throw new Exception("Invalid refresh token");
+                var principal = GetPrincipalFromExpiredToken(refreshTokenDto.Token);
+                // PRESERVED: Try both claim types for user ID
+                var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+                             principal.FindFirst("UserId")?.Value;
+
+                if (string.IsNullOrEmpty(userId))
+                    throw new Exception("Invalid token");
+
+                var user = await _context.Users
+                    .Include(u => u.Subscription)
+                    .FirstOrDefaultAsync(u => u.Id == int.Parse(userId));
+
+                if (user == null)
+                    throw new Exception("User not found");
+
+                // NEW: Check if user is still active
+                if (!user.IsActive)
+                    throw new Exception("User account is blocked");
+
+                // PRESERVED: Validate refresh token
+                if (user.RefreshToken != refreshTokenDto.RefreshToken)
+                    throw new Exception("Invalid refresh token");
+
+                // PRESERVED: Check if refresh token is expired
+                if (user.RefreshTokenExpiryTime <= DateTime.Now)
+                    throw new Exception("Refresh token expired");
+
+                // Generate new tokens
+                var newAccessToken = CreateToken(user);
+                var newRefreshToken = GenerateRefreshToken();
+
+                // Update user's refresh token
+                user.RefreshToken = newRefreshToken;
+                user.RefreshTokenExpiryTime = DateTime.Now.AddDays(30); // Extended for better UX
+                user.UpdatedAt = DateTime.Now;
+
+                await _context.SaveChangesAsync();
+
+                return new AuthResponseDto
+                {
+                    User = MapUserToDto(user),
+                    Token = newAccessToken,
+                    RefreshToken = newRefreshToken
+                };
             }
-
-            // Generate new tokens
-            var newAccessToken = CreateToken(user);
-            var newRefreshToken = GenerateRefreshToken();
-
-            user.RefreshToken = newRefreshToken;
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
-            await _context.SaveChangesAsync();
-
-            return new AuthResponseDto
+            catch (Exception ex)
             {
-                User = MapUserToDto(user),
-                Token = newAccessToken,
-                RefreshToken = newRefreshToken
-            };
+                _logger.LogError(ex, "Token refresh failed");
+                throw;
+            }
         }
 
         public async Task<AuthResponseDto> RefreshUserToken(int userId)
@@ -243,7 +286,7 @@ namespace DreamCleaningBackend.Services
 
             // Update refresh token in database
             user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(30);
 
             await _context.SaveChangesAsync();
 
@@ -337,7 +380,7 @@ namespace DreamCleaningBackend.Services
         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
         new Claim(ClaimTypes.Email, user.Email),
         new Claim(ClaimTypes.Name, $"{user.FirstName} {user.LastName}"),
-        // IMPORTANT: Add both ClaimTypes.Role and custom "Role" claim
+        // IMPORTANT: Add both ClaimTypes.Role and custom "Role" claim (PRESERVED FROM ORIGINAL)
         new Claim(ClaimTypes.Role, user.Role.ToString()),
         new Claim("Role", user.Role.ToString()),
         new Claim("UserId", user.Id.ToString()),
@@ -360,7 +403,7 @@ namespace DreamCleaningBackend.Services
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddHours(1), // Short-lived access token
+                Expires = DateTime.Now.AddHours(2), // Extended from 1 hour to 2 hours for better UX
                 SigningCredentials = creds
             };
 
@@ -401,7 +444,7 @@ namespace DreamCleaningBackend.Services
             // Update user password
             user.PasswordHash = passwordHash;
             user.PasswordSalt = passwordSalt;
-            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.Now;
 
             await _context.SaveChangesAsync();
 
@@ -428,7 +471,7 @@ namespace DreamCleaningBackend.Services
         {
             var user = await _context.Users
                 .FirstOrDefaultAsync(u => u.EmailVerificationToken == token
-                    && u.EmailVerificationTokenExpiry > DateTime.UtcNow);
+                    && u.EmailVerificationTokenExpiry > DateTime.Now);
 
             if (user == null)
                 throw new Exception("Invalid or expired verification token");
@@ -436,7 +479,7 @@ namespace DreamCleaningBackend.Services
             user.IsEmailVerified = true;
             user.EmailVerificationToken = null;
             user.EmailVerificationTokenExpiry = null;
-            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.Now;
 
             await _context.SaveChangesAsync();
 
@@ -458,8 +501,8 @@ namespace DreamCleaningBackend.Services
 
             // Generate new verification token
             user.EmailVerificationToken = GenerateVerificationToken();
-            user.EmailVerificationTokenExpiry = DateTime.UtcNow.AddHours(24);
-            user.UpdatedAt = DateTime.UtcNow;
+            user.EmailVerificationTokenExpiry = DateTime.Now.AddHours(24);
+            user.UpdatedAt = DateTime.Now;
 
             await _context.SaveChangesAsync();
 
@@ -479,8 +522,8 @@ namespace DreamCleaningBackend.Services
                 return true; // Don't reveal if user exists
 
             user.PasswordResetToken = GenerateVerificationToken();
-            user.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(1);
-            user.UpdatedAt = DateTime.UtcNow;
+            user.PasswordResetTokenExpiry = DateTime.Now.AddHours(1);
+            user.UpdatedAt = DateTime.Now;
 
             await _context.SaveChangesAsync();
 
@@ -494,7 +537,7 @@ namespace DreamCleaningBackend.Services
         {
             var user = await _context.Users
                 .FirstOrDefaultAsync(u => u.PasswordResetToken == resetDto.Token
-                    && u.PasswordResetTokenExpiry > DateTime.UtcNow);
+                    && u.PasswordResetTokenExpiry > DateTime.Now);
 
             if (user == null)
                 throw new Exception("Invalid or expired reset token");
@@ -505,7 +548,7 @@ namespace DreamCleaningBackend.Services
             user.PasswordSalt = passwordSalt;
             user.PasswordResetToken = null;
             user.PasswordResetTokenExpiry = null;
-            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.Now;
 
             await _context.SaveChangesAsync();
 
@@ -541,7 +584,7 @@ namespace DreamCleaningBackend.Services
                         LastName = fbUser.LastName ?? "",
                         AuthProvider = "Facebook",
                         ExternalAuthId = fbUser.Id,
-                        CreatedAt = DateTime.UtcNow,
+                        CreatedAt = DateTime.Now,
                         FirstTimeOrder = true,
                         IsActive = true,
                         IsEmailVerified = true // Facebook emails are pre-verified
@@ -556,8 +599,18 @@ namespace DreamCleaningBackend.Services
 
                 // Update refresh token
                 user.RefreshToken = GenerateRefreshToken();
-                user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+                user.RefreshTokenExpiryTime = DateTime.Now.AddDays(30);
                 await _context.SaveChangesAsync();
+
+                try
+                {
+                    await _specialOfferService.GrantFirstTimeOfferIfEligible(user.Id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to grant first-time offer to user {UserId}", user.Id);
+                    // Don't fail registration if special offer fails
+                }
 
                 return new AuthResponseDto
                 {

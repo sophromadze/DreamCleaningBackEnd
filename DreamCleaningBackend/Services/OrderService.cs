@@ -132,14 +132,14 @@ namespace DreamCleaningBackend.Services
             order.State = updateOrderDto.State;
             order.ZipCode = updateOrderDto.ZipCode;
             order.Tips = updateOrderDto.Tips;
-            order.UpdatedAt = DateTime.UtcNow;
+            order.UpdatedAt = DateTime.Now;
 
             // Update user's phone number if they don't have one
             var user = await _context.Users.FindAsync(userId);
             if (user != null && string.IsNullOrEmpty(user.Phone) && !string.IsNullOrEmpty(updateOrderDto.ContactPhone))
             {
                 user.Phone = updateOrderDto.ContactPhone;
-                user.UpdatedAt = DateTime.UtcNow;
+                user.UpdatedAt = DateTime.Now;
                 Console.WriteLine($"Updated user's phone number to: {updateOrderDto.ContactPhone}");
             }
 
@@ -270,7 +270,7 @@ namespace DreamCleaningBackend.Services
                             Cost = serviceCost,
                             Duration = serviceDuration,
                             PriceMultiplier = priceMultiplier,
-                            CreatedAt = DateTime.UtcNow
+                            CreatedAt = DateTime.Now
                         };
                         order.OrderServices.Add(orderService);
                         newSubTotal += serviceCost;
@@ -331,7 +331,7 @@ namespace DreamCleaningBackend.Services
                         Hours = extraServiceDto.Hours,
                         Cost = cost,
                         Duration = duration, // Now this is properly calculated
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.Now
                     };
                     order.OrderExtraServices.Add(orderExtraService);
 
@@ -418,7 +418,7 @@ namespace DreamCleaningBackend.Services
                             // Update existing usage record
                             existingUsage.AmountUsed = newGiftCardAmountToUse;
                             existingUsage.BalanceAfterUsage = giftCard.CurrentBalance;
-                            existingUsage.UsedAt = DateTime.UtcNow; // Update timestamp
+                            existingUsage.UsedAt = DateTime.Now; // Update timestamp
                         }
                         else
                         {
@@ -431,7 +431,7 @@ namespace DreamCleaningBackend.Services
                                 UserId = userId,
                                 AmountUsed = newGiftCardAmountToUse,
                                 BalanceAfterUsage = giftCard.CurrentBalance,
-                                UsedAt = DateTime.UtcNow
+                                UsedAt = DateTime.Now
                             };
                             _context.GiftCardUsages.Add(newUsage);
                         }
@@ -657,7 +657,7 @@ namespace DreamCleaningBackend.Services
                 throw new Exception("Cannot complete a cancelled order");
 
             order.Status = "Done";
-            order.UpdatedAt = DateTime.UtcNow;
+            order.UpdatedAt = DateTime.Now;
 
             await _orderRepository.UpdateAsync(order);
             await _orderRepository.SaveChangesAsync();

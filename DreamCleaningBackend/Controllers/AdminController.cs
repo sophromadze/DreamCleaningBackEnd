@@ -144,7 +144,7 @@ namespace DreamCleaningBackend.Controllers
                 Description = dto.Description,
                 DisplayOrder = dto.DisplayOrder,
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             _context.ServiceTypes.Add(serviceType);
@@ -186,7 +186,7 @@ namespace DreamCleaningBackend.Controllers
             serviceType.BasePrice = dto.BasePrice;
             serviceType.Description = dto.Description;
             serviceType.DisplayOrder = dto.DisplayOrder;
-            serviceType.UpdatedAt = DateTime.UtcNow;
+            serviceType.UpdatedAt = DateTime.Now;
 
             // LOG THE UPDATE
             await _auditService.LogUpdateAsync(originalServiceType, serviceType);
@@ -223,7 +223,7 @@ namespace DreamCleaningBackend.Controllers
             };
 
             serviceType.IsActive = false;
-            serviceType.UpdatedAt = DateTime.UtcNow;
+            serviceType.UpdatedAt = DateTime.Now;
 
             // LOG THE UPDATE (deactivation is an update)
             await _auditService.LogUpdateAsync(originalServiceType, serviceType);
@@ -253,7 +253,7 @@ namespace DreamCleaningBackend.Controllers
             };
 
             serviceType.IsActive = true;
-            serviceType.UpdatedAt = DateTime.UtcNow;
+            serviceType.UpdatedAt = DateTime.Now;
 
             // LOG THE UPDATE (activation is an update)
             await _auditService.LogUpdateAsync(originalServiceType, serviceType);
@@ -339,7 +339,7 @@ namespace DreamCleaningBackend.Controllers
                 ServiceRelationType = dto.ServiceRelationType, // ADD THIS
                 DisplayOrder = dto.DisplayOrder,
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             _context.Services.Add(service);
@@ -390,7 +390,7 @@ namespace DreamCleaningBackend.Controllers
                 ServiceRelationType = sourceService.ServiceRelationType, // ADD THIS
                 DisplayOrder = sourceService.DisplayOrder,
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             _context.Services.Add(newService);
@@ -457,7 +457,7 @@ namespace DreamCleaningBackend.Controllers
             service.Unit = dto.Unit;
             service.ServiceRelationType = dto.ServiceRelationType;
             service.DisplayOrder = dto.DisplayOrder;
-            service.UpdatedAt = DateTime.UtcNow;
+            service.UpdatedAt = DateTime.Now;
 
             // LOG THE UPDATE
             await _auditService.LogUpdateAsync(originalService, service);
@@ -514,7 +514,7 @@ namespace DreamCleaningBackend.Controllers
             };
 
             service.IsActive = false;
-            service.UpdatedAt = DateTime.UtcNow;
+            service.UpdatedAt = DateTime.Now;
 
             // Save first
             await _context.SaveChangesAsync();
@@ -585,7 +585,7 @@ namespace DreamCleaningBackend.Controllers
             };
 
             service.IsActive = true;
-            service.UpdatedAt = DateTime.UtcNow;
+            service.UpdatedAt = DateTime.Now;
 
             // Save first
             await _context.SaveChangesAsync();
@@ -700,7 +700,7 @@ namespace DreamCleaningBackend.Controllers
                 IsAvailableForAll = dto.IsAvailableForAll,
                 DisplayOrder = dto.DisplayOrder,
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             _context.ExtraServices.Add(extraService);
@@ -752,7 +752,7 @@ namespace DreamCleaningBackend.Controllers
                 IsAvailableForAll = false, // When copying to specific service type
                 DisplayOrder = sourceExtraService.DisplayOrder,
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             _context.ExtraServices.Add(newExtraService);
@@ -821,7 +821,7 @@ namespace DreamCleaningBackend.Controllers
             extraService.ServiceTypeId = dto.ServiceTypeId;
             extraService.IsAvailableForAll = dto.IsAvailableForAll;
             extraService.DisplayOrder = dto.DisplayOrder;
-            extraService.UpdatedAt = DateTime.UtcNow;
+            extraService.UpdatedAt = DateTime.Now;
 
             // LOG THE UPDATE
             await _auditService.LogUpdateAsync(originalExtraService, extraService);
@@ -879,7 +879,7 @@ namespace DreamCleaningBackend.Controllers
             };
 
             extraService.IsActive = false;
-            extraService.UpdatedAt = DateTime.UtcNow;
+            extraService.UpdatedAt = DateTime.Now;
 
             // Save first
             await _context.SaveChangesAsync();
@@ -952,7 +952,7 @@ namespace DreamCleaningBackend.Controllers
             };
 
             extraService.IsActive = true;
-            extraService.UpdatedAt = DateTime.UtcNow;
+            extraService.UpdatedAt = DateTime.Now;
 
             // Save first
             await _context.SaveChangesAsync();
@@ -1051,7 +1051,7 @@ namespace DreamCleaningBackend.Controllers
                 SubscriptionDays = dto.SubscriptionDays,
                 DisplayOrder = dto.DisplayOrder,
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
             _context.Subscriptions.Add(subscription);
             await _context.SaveChangesAsync();
@@ -1093,7 +1093,7 @@ namespace DreamCleaningBackend.Controllers
             subscription.DiscountPercentage = dto.DiscountPercentage;
             subscription.SubscriptionDays = dto.SubscriptionDays;
             subscription.DisplayOrder = dto.DisplayOrder;
-            subscription.UpdatedAt = DateTime.UtcNow;
+            subscription.UpdatedAt = DateTime.Now;
 
             // LOG THE UPDATE
             await _auditService.LogUpdateAsync(originalSubscription, subscription);
@@ -1119,7 +1119,7 @@ namespace DreamCleaningBackend.Controllers
                 return NotFound();
 
             subscription.IsActive = false;
-            subscription.UpdatedAt = DateTime.UtcNow;
+            subscription.UpdatedAt = DateTime.Now;
 
             await _auditService.LogDeleteAsync(subscription);
 
@@ -1154,7 +1154,7 @@ namespace DreamCleaningBackend.Controllers
                 };
 
                 subscription.IsActive = false;
-                subscription.UpdatedAt = DateTime.UtcNow;
+                subscription.UpdatedAt = DateTime.Now;
 
                 // Save first
                 await _context.SaveChangesAsync();
@@ -1218,7 +1218,7 @@ namespace DreamCleaningBackend.Controllers
                 };
 
                 subscription.IsActive = true;
-                subscription.UpdatedAt = DateTime.UtcNow;
+                subscription.UpdatedAt = DateTime.Now;
 
                 // Save first
                 await _context.SaveChangesAsync();
@@ -1298,7 +1298,7 @@ namespace DreamCleaningBackend.Controllers
                 ValidTo = dto.ValidTo,
                 MinimumOrderAmount = dto.MinimumOrderAmount,
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             _context.PromoCodes.Add(promoCode);
@@ -1356,7 +1356,7 @@ namespace DreamCleaningBackend.Controllers
             promoCode.ValidFrom = dto.ValidFrom;
             promoCode.ValidTo = dto.ValidTo;
             promoCode.MinimumOrderAmount = dto.MinimumOrderAmount;
-            promoCode.UpdatedAt = DateTime.UtcNow;
+            promoCode.UpdatedAt = DateTime.Now;
 
             // LOG THE UPDATE
             await _auditService.LogUpdateAsync(originalPromoCode, promoCode);
@@ -1428,7 +1428,7 @@ namespace DreamCleaningBackend.Controllers
                 };
 
                 promoCode.IsActive = false;
-                promoCode.UpdatedAt = DateTime.UtcNow;
+                promoCode.UpdatedAt = DateTime.Now;
 
                 // Save first
                 await _context.SaveChangesAsync();
@@ -1502,7 +1502,7 @@ namespace DreamCleaningBackend.Controllers
                 };
 
                 promoCode.IsActive = true;
-                promoCode.UpdatedAt = DateTime.UtcNow;
+                promoCode.UpdatedAt = DateTime.Now;
 
                 // Save first
                 await _context.SaveChangesAsync();
@@ -1611,7 +1611,7 @@ namespace DreamCleaningBackend.Controllers
                 return BadRequest(new { message = validationResult.ErrorMessage });
 
             targetUser.Role = newRole;
-            targetUser.UpdatedAt = DateTime.UtcNow;
+            targetUser.UpdatedAt = DateTime.Now;
 
             await _context.SaveChangesAsync();
 
@@ -1722,7 +1722,7 @@ namespace DreamCleaningBackend.Controllers
             }
 
             targetUser.IsActive = dto.IsActive;
-            targetUser.UpdatedAt = DateTime.UtcNow;
+            targetUser.UpdatedAt = DateTime.Now;
 
             await _context.SaveChangesAsync();
 
@@ -1914,7 +1914,7 @@ namespace DreamCleaningBackend.Controllers
 
                 // Update the status
                 order.Status = dto.Status;
-                order.UpdatedAt = DateTime.UtcNow; // Use UTC for consistency
+                order.UpdatedAt = DateTime.Now; // Use UTC for consistency
 
                 // Save changes FIRST
                 await _context.SaveChangesAsync();
@@ -2254,7 +2254,7 @@ namespace DreamCleaningBackend.Controllers
                 };
 
                 giftCard.IsActive = false;
-                giftCard.UpdatedAt = DateTime.UtcNow;
+                giftCard.UpdatedAt = DateTime.Now;
 
                 // Save first
                 await _context.SaveChangesAsync();
@@ -2330,7 +2330,7 @@ namespace DreamCleaningBackend.Controllers
                 };
 
                 giftCard.IsActive = true;
-                giftCard.UpdatedAt = DateTime.UtcNow;
+                giftCard.UpdatedAt = DateTime.Now;
 
                 // Save first
                 await _context.SaveChangesAsync();
@@ -2399,7 +2399,7 @@ namespace DreamCleaningBackend.Controllers
         [RequirePermission(Permission.View)]
         public async Task<IActionResult> GetRecentAuditLogs([FromQuery] int? days = 7)
         {
-            var startDate = DateTime.UtcNow.AddDays(-days.Value);
+            var startDate = DateTime.Now.AddDays(-days.Value);
 
             var logs = await _context.AuditLogs
                 .Where(a => a.CreatedAt >= startDate)

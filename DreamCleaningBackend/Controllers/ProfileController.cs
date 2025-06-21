@@ -5,6 +5,7 @@ using DreamCleaningBackend.DTOs;
 using DreamCleaningBackend.Services.Interfaces;
 using DreamCleaningBackend.Data;
 using Microsoft.EntityFrameworkCore;
+using DreamCleaningBackend.Services;
 
 namespace DreamCleaningBackend.Controllers
 {
@@ -15,12 +16,14 @@ namespace DreamCleaningBackend.Controllers
     {
         private readonly IProfileService _profileService;
         private readonly IAuditService _auditService; 
-        private readonly ApplicationDbContext _context; 
+        private readonly ISpecialOfferService _specialOfferService;
+        private readonly ApplicationDbContext _context;
 
-        public ProfileController(IProfileService profileService, IAuditService auditService,  ApplicationDbContext context)
+        public ProfileController(IProfileService profileService, IAuditService auditService, ISpecialOfferService specialOfferService, ApplicationDbContext context)
         {
             _profileService = profileService;
-            _auditService = auditService; 
+            _auditService = auditService;
+            _specialOfferService = specialOfferService;
             _context = context; 
         }
 
@@ -129,7 +132,6 @@ namespace DreamCleaningBackend.Controllers
             }
         }
 
-
         [HttpPut("apartments/{apartmentId}")]
         public async Task<ActionResult<ApartmentDto>> UpdateApartment(int apartmentId, ApartmentDto apartmentDto)
         {
@@ -198,6 +200,21 @@ namespace DreamCleaningBackend.Controllers
                 }
 
                 return Ok(new { message = "Apartment deleted successfully" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("special-offers")]
+        public async Task<ActionResult<List<UserSpecialOfferDto>>> GetMySpecialOffers()
+        {
+            try
+            {
+                var userId = GetUserId();
+                var offers = await _specialOfferService.GetUserAvailableOffers(userId);
+                return Ok(offers);
             }
             catch (Exception ex)
             {

@@ -19,7 +19,7 @@ namespace DreamCleaningBackend.Services
                 .SendAsync("UserBlocked", new
                 {
                     message = reason,
-                    timestamp = DateTime.UtcNow,
+                    timestamp = DateTime.Now,
                     shouldLogout = true
                 });
         }
@@ -31,7 +31,7 @@ namespace DreamCleaningBackend.Services
                 {
                     newRole = newRole,
                     message = $"Your role has been updated to {newRole}. Please refresh to see the changes.",
-                    timestamp = DateTime.UtcNow,
+                    timestamp = DateTime.Now,
                     shouldRefresh = true
                 });
         }
@@ -42,7 +42,7 @@ namespace DreamCleaningBackend.Services
                 .SendAsync("UserUnblocked", new
                 {
                     message = "Your account has been unblocked. You can now use the system normally.",
-                    timestamp = DateTime.UtcNow
+                    timestamp = DateTime.Now
                 });
         }
 
@@ -52,7 +52,7 @@ namespace DreamCleaningBackend.Services
                 .SendAsync("ForceLogout", new
                 {
                     reason = reason,
-                    timestamp = DateTime.UtcNow
+                    timestamp = DateTime.Now
                 });
         }
     }

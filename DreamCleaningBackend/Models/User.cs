@@ -46,6 +46,8 @@ namespace DreamCleaningBackend.Models
 
         // First time order discount
         public bool FirstTimeOrder { get; set; } = true;
+        // Add this line to your existing User.cs
+        public virtual ICollection<UserSpecialOffer> UserSpecialOffers { get; set; } = new List<UserSpecialOffer>();
 
         // User's apartments
         public virtual ICollection<Apartment> Apartments { get; set; } = new List<Apartment>();

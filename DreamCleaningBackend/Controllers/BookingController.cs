@@ -226,7 +226,7 @@ namespace DreamCleaningBackend.Controllers
                     }
 
                     // Check validity dates - YOUR EXISTING LOGIC
-                    if (promoCode.ValidFrom.HasValue && promoCode.ValidFrom.Value > DateTime.UtcNow)
+                    if (promoCode.ValidFrom.HasValue && promoCode.ValidFrom.Value > DateTime.Now)
                     {
                         return Ok(new PromoCodeValidationDto
                         {
@@ -235,7 +235,7 @@ namespace DreamCleaningBackend.Controllers
                         });
                     }
 
-                    if (promoCode.ValidTo.HasValue && promoCode.ValidTo.Value < DateTime.UtcNow)
+                    if (promoCode.ValidTo.HasValue && promoCode.ValidTo.Value < DateTime.Now)
                     {
                         return Ok(new PromoCodeValidationDto
                         {
@@ -487,7 +487,7 @@ namespace DreamCleaningBackend.Controllers
                                 Cost = serviceCost,
                                 Duration = serviceDuration,
                                 PriceMultiplier = priceMultiplier,
-                                CreatedAt = DateTime.UtcNow
+                                CreatedAt = DateTime.Now
                             };
                             order.OrderServices.Add(orderService);
                             subTotal += serviceCost;
@@ -554,7 +554,7 @@ namespace DreamCleaningBackend.Controllers
                             Hours = extraServiceDto.Hours,
                             Cost = cost,
                             Duration = duration,
-                            CreatedAt = DateTime.UtcNow
+                            CreatedAt = DateTime.Now
                         };
                         order.OrderExtraServices.Add(orderExtraService);
 
@@ -779,14 +779,14 @@ namespace DreamCleaningBackend.Controllers
                     if (string.IsNullOrEmpty(user.Phone) && !string.IsNullOrEmpty(order.ContactPhone))
                     {
                         user.Phone = order.ContactPhone;
-                        user.UpdatedAt = DateTime.UtcNow;
+                        user.UpdatedAt = DateTime.Now;
                     }
 
                     // Handle first-time discount
                     if (order.PromoCode == "firstUse" && user.FirstTimeOrder)
                     {
                         user.FirstTimeOrder = false;
-                        user.UpdatedAt = DateTime.UtcNow;
+                        user.UpdatedAt = DateTime.Now;
                     }
 
                     // FIXED: Only auto-save apartment if conditions are met
@@ -842,7 +842,7 @@ namespace DreamCleaningBackend.Controllers
                                     existingApartmentByName.State = order.State;
                                     existingApartmentByName.PostalCode = order.ZipCode;
                                     existingApartmentByName.SpecialInstructions = order.SpecialInstructions;
-                                    existingApartmentByName.UpdatedAt = DateTime.UtcNow;
+                                    existingApartmentByName.UpdatedAt = DateTime.Now;
 
                                     Console.WriteLine($"Found existing apartment with name '{existingApartmentByName.Name}', updating all fields");
                                 }
@@ -859,7 +859,7 @@ namespace DreamCleaningBackend.Controllers
                                         State = order.State,
                                         PostalCode = order.ZipCode,
                                         SpecialInstructions = order.SpecialInstructions,
-                                        CreatedAt = DateTime.UtcNow,
+                                        CreatedAt = DateTime.Now,
                                         IsActive = true
                                     };
 
@@ -883,7 +883,7 @@ namespace DreamCleaningBackend.Controllers
 
                 // Simulate payment completion
                 order.IsPaid = true;
-                order.PaidAt = DateTime.UtcNow;
+                order.PaidAt = DateTime.Now;
                 order.Status = "Active";
                 order.PaymentIntentId = "pi_simulated_" + Guid.NewGuid().ToString();
 
@@ -916,7 +916,7 @@ namespace DreamCleaningBackend.Controllers
                 if (user.FirstTimeOrder && order.PromoCode == "firstUse")
                 {
                     user.FirstTimeOrder = false;
-                    user.UpdatedAt = DateTime.UtcNow;
+                    user.UpdatedAt = DateTime.Now;
                 }
 
                 await _context.SaveChangesAsync();

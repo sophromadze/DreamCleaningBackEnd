@@ -85,6 +85,7 @@ builder.Services.AddScoped<IGiftCardService, GiftCardService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddHostedService<UnverifiedUserCleanupService>();
+builder.Services.AddScoped<ISpecialOfferService, SpecialOfferService>();
 
 builder.Services.AddHttpClient();
 

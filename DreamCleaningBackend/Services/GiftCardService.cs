@@ -64,7 +64,7 @@ namespace DreamCleaningBackend.Services
                 SenderEmail = createDto.SenderEmail,
                 Message = createDto.Message,
                 PurchasedByUserId = userId,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             _context.GiftCards.Add(giftCard);
@@ -164,7 +164,7 @@ namespace DreamCleaningBackend.Services
 
             // Update gift card balance
             giftCard.CurrentBalance -= amountToApply;
-            giftCard.UpdatedAt = DateTime.UtcNow;
+            giftCard.UpdatedAt = DateTime.Now;
 
             // Save gift card changes first
             await _context.SaveChangesAsync();
@@ -180,7 +180,7 @@ namespace DreamCleaningBackend.Services
                 UserId = userId,
                 AmountUsed = amountToApply,
                 BalanceAfterUsage = giftCard.CurrentBalance,
-                UsedAt = DateTime.UtcNow
+                UsedAt = DateTime.Now
             };
 
             _context.GiftCardUsages.Add(usage);
@@ -320,50 +320,46 @@ namespace DreamCleaningBackend.Services
                 .FirstOrDefaultAsync(g => g.Code == code);
         }
 
-        public async Task<bool> MarkGiftCardAsPaid(int giftCardId, string paymentIntentId)
-        {
-            var giftCard = await _context.GiftCards.FindAsync(giftCardId);
-            if (giftCard == null) return false;
+		public async Task<bool> MarkGiftCardAsPaid(int giftCardId, string paymentIntentId)
+		{
+			var giftCard = await _context.GiftCards.FindAsync(giftCardId);
+			if (giftCard == null) return false;
 
-            // ADD THIS: CREATE A COPY FOR AUDITING
-            var originalGiftCard = new GiftCard
-            {
-                Id = giftCard.Id,
-                Code = giftCard.Code,
-                IsPaid = giftCard.IsPaid,
-                PaidAt = giftCard.PaidAt,
-                PaymentIntentId = giftCard.PaymentIntentId,
-                CurrentBalance = giftCard.CurrentBalance
-            };
+			// NEW: Check if this is the initial payment
+			bool isInitialPayment = !giftCard.IsPaid && giftCard.PaidAt == null;
 
-            giftCard.IsPaid = true;
-            giftCard.PaidAt = DateTime.UtcNow;
-            giftCard.PaymentIntentId = paymentIntentId;
-            giftCard.UpdatedAt = DateTime.UtcNow;
+			// YOUR EXISTING CODE: CREATE A COPY FOR AUDITING
+			var originalGiftCard = new GiftCard
+			{
+				Id = giftCard.Id,
+				Code = giftCard.Code,
+				IsPaid = giftCard.IsPaid,
+				PaidAt = giftCard.PaidAt,
+				PaymentIntentId = giftCard.PaymentIntentId,
+				CurrentBalance = giftCard.CurrentBalance
+			};
 
-            // ADD THIS: LOG THE UPDATE
-            await _auditService.LogUpdateAsync(originalGiftCard, giftCard);
+			// YOUR EXISTING CODE: All updates remain exactly the same
+			giftCard.IsPaid = true;
+			giftCard.PaidAt = DateTime.Now;
+			giftCard.PaymentIntentId = paymentIntentId;
+			giftCard.UpdatedAt = DateTime.Now;
 
-            await _context.SaveChangesAsync();
-            return true;
-        }
+			// MODIFIED: Only log if NOT initial payment
+			if (!isInitialPayment)
+			{
+				await _auditService.LogUpdateAsync(originalGiftCard, giftCard);
+			}
 
-        public async Task<bool> SimulateGiftCardPayment(int giftCardId)
-        {
-            var giftCard = await _context.GiftCards.FindAsync(giftCardId);
-            if (giftCard == null) return false;
+			// YOUR EXISTING CODE: SaveChanges in the same place
+			await _context.SaveChangesAsync();
+			return true;
+		}
 
-            // Simulate payment by marking as paid
-            giftCard.IsPaid = true;
-            giftCard.PaidAt = DateTime.UtcNow;
-            giftCard.PaymentIntentId = "pi_simulated_" + Guid.NewGuid().ToString();
-            giftCard.UpdatedAt = DateTime.UtcNow;
-
-            await _context.SaveChangesAsync();
-
-            // You could also send email notification here if needed
-
-            return true;
-        }
-    }
+		public async Task<bool> SimulateGiftCardPayment(int giftCardId)
+		{
+			var paymentIntentId = "pi_simulated_" + Guid.NewGuid().ToString();
+			return await MarkGiftCardAsPaid(giftCardId, paymentIntentId);
+		}
+	}
 }

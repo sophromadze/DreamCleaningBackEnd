@@ -49,7 +49,7 @@ namespace DreamCleaningBackend.Services
                     UserId = userId,
                     IpAddress = GetIpAddress(),
                     UserAgent = GetUserAgent(),
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 };
 
                 _context.AuditLogs.Add(auditLog);
@@ -89,7 +89,7 @@ namespace DreamCleaningBackend.Services
                         UserId = userId,
                         IpAddress = GetIpAddress(),
                         UserAgent = GetUserAgent(),
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.Now
                     };
 
                     _context.AuditLogs.Add(auditLog);
@@ -124,7 +124,7 @@ namespace DreamCleaningBackend.Services
                     UserId = userId,
                     IpAddress = GetIpAddress(),
                     UserAgent = GetUserAgent(),
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 };
 
                 _context.AuditLogs.Add(auditLog);

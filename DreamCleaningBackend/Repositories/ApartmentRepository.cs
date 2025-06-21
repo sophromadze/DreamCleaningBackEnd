@@ -48,7 +48,7 @@ namespace DreamCleaningBackend.Repositories
 
             // Soft delete
             apartment.IsActive = false;
-            apartment.UpdatedAt = DateTime.UtcNow;
+            apartment.UpdatedAt = DateTime.Now;
             return true;
         }
 

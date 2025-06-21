@@ -25,8 +25,10 @@ namespace DreamCleaningBackend.Data
         public DbSet<GiftCard> GiftCards { get; set; }
         public DbSet<GiftCardUsage> GiftCardUsages { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
+		public DbSet<SpecialOffer> SpecialOffers { get; set; }
+		public DbSet<UserSpecialOffer> UserSpecialOffers { get; set; }
 
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+		protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
@@ -66,8 +68,13 @@ namespace DreamCleaningBackend.Data
                 .HasForeignKey(o => o.SubscriptionId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Order configuration
-            modelBuilder.Entity<Order>()
+			// SpecialOffer configuration
+			modelBuilder.Entity<UserSpecialOffer>()
+	            .HasIndex(u => new { u.UserId, u.SpecialOfferId })
+	            .IsUnique();
+
+			// Order configuration
+			modelBuilder.Entity<Order>()
                 .HasOne(o => o.User)
                 .WithMany(u => u.Orders)
                 .HasForeignKey(o => o.UserId)
@@ -143,7 +150,7 @@ namespace DreamCleaningBackend.Data
                      SubscriptionDays = 0,
                      DiscountPercentage = 0,
                      DisplayOrder = 1,
-                     CreatedAt = DateTime.UtcNow
+                     CreatedAt = DateTime.Now
                  },
                 new Subscription
                 {
@@ -153,7 +160,7 @@ namespace DreamCleaningBackend.Data
                     SubscriptionDays = 7,
                     DiscountPercentage = 15,
                     DisplayOrder = 2,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 },
                 new Subscription
                 {
@@ -163,7 +170,7 @@ namespace DreamCleaningBackend.Data
                     SubscriptionDays = 14,
                     DiscountPercentage = 10,
                     DisplayOrder = 3,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 },
                 new Subscription
                 {
@@ -173,7 +180,7 @@ namespace DreamCleaningBackend.Data
                     SubscriptionDays = 30,
                     DiscountPercentage = 5,
                     DisplayOrder = 4,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 }
             );
 
@@ -187,7 +194,7 @@ namespace DreamCleaningBackend.Data
                     Description = "Complete home cleaning service",
                     DisplayOrder = 1,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 },
                 new ServiceType
                 {
@@ -197,7 +204,7 @@ namespace DreamCleaningBackend.Data
                     Description = "Professional office cleaning service",
                     DisplayOrder = 2,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 }
             );
 
@@ -318,7 +325,7 @@ namespace DreamCleaningBackend.Data
                     StepValue = 1,
                     DisplayOrder = 1,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 },
                 new Service
                 {
@@ -334,7 +341,7 @@ namespace DreamCleaningBackend.Data
                     StepValue = 1,
                     DisplayOrder = 2,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 },
                 new Service
                 {
@@ -352,7 +359,7 @@ namespace DreamCleaningBackend.Data
                     Unit = "per sqft",
                     DisplayOrder = 3,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 }
             );
 
@@ -374,7 +381,7 @@ namespace DreamCleaningBackend.Data
                     ServiceRelationType = "cleaner",
                     DisplayOrder = 1,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 },
                 new Service
                 {
@@ -391,7 +398,7 @@ namespace DreamCleaningBackend.Data
                     ServiceRelationType = "hours",
                     DisplayOrder = 2,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 }
             );
 
@@ -410,7 +417,7 @@ namespace DreamCleaningBackend.Data
                     IsAvailableForAll = true,
                     DisplayOrder = 1,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 },
                 new ExtraService
                 {
@@ -425,7 +432,7 @@ namespace DreamCleaningBackend.Data
                     IsAvailableForAll = true,
                     DisplayOrder = 2,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 },
                 new ExtraService
                 {
@@ -439,7 +446,7 @@ namespace DreamCleaningBackend.Data
                     IsAvailableForAll = true,
                     DisplayOrder = 3,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 },
                 new ExtraService
                 {
@@ -453,7 +460,7 @@ namespace DreamCleaningBackend.Data
                     IsAvailableForAll = true,
                     DisplayOrder = 4,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 },
                 new ExtraService
                 {
@@ -467,7 +474,7 @@ namespace DreamCleaningBackend.Data
                     IsAvailableForAll = true,
                     DisplayOrder = 5,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 },
                 new ExtraService
                 {
@@ -481,7 +488,7 @@ namespace DreamCleaningBackend.Data
                     IsAvailableForAll = true,
                     DisplayOrder = 6,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 },
                 new ExtraService
                 {
@@ -496,7 +503,7 @@ namespace DreamCleaningBackend.Data
                     IsAvailableForAll = false,
                     DisplayOrder = 7,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 },
                 new ExtraService
                 {
@@ -509,7 +516,7 @@ namespace DreamCleaningBackend.Data
                     IsAvailableForAll = true,
                     DisplayOrder = 8,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 },
                 new ExtraService
                 {
@@ -522,7 +529,7 @@ namespace DreamCleaningBackend.Data
                     IsAvailableForAll = true,
                     DisplayOrder = 9,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 }
             );
         }
