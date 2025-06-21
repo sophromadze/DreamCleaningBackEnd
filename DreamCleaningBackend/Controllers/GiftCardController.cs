@@ -13,10 +13,12 @@ namespace DreamCleaningBackend.Controllers
     public class GiftCardController : ControllerBase
     {
         private readonly IGiftCardService _giftCardService;
+        private readonly IEmailService _emailService;
 
-        public GiftCardController(IGiftCardService giftCardService)
+        public GiftCardController(IGiftCardService giftCardService, IEmailService emailService)
         {
             _giftCardService = giftCardService;
+            _emailService = emailService;
         }
 
         [HttpPost]
@@ -96,7 +98,40 @@ namespace DreamCleaningBackend.Controllers
 
                 if (success)
                 {
-                    return Ok(new { message = "Gift card payment processed successfully", paymentIntentId });
+                    // Get the gift card details to send the email
+                    var userId = GetUserId();
+                    var giftCards = await _giftCardService.GetUserGiftCards(userId);
+                    var giftCard = giftCards.FirstOrDefault(gc => gc.Id == giftCardId);
+
+                    if (giftCard != null)
+                    {
+                        // Send email notification to recipient with sender's email
+                        await _emailService.SendGiftCardNotificationAsync(
+                            giftCard.RecipientEmail,
+                            giftCard.RecipientName,
+                            giftCard.SenderName,
+                            giftCard.Code,
+                            giftCard.OriginalAmount,
+                            giftCard.Message,
+                            giftCard.SenderEmail  // Added sender's email
+                        );
+
+                        return Ok(new
+                        {
+                            message = "Gift card payment processed successfully and email sent to recipient",
+                            paymentIntentId
+                        });
+                    }
+                    else
+                    {
+                        // Payment successful but couldn't send email (still return success)
+                        return Ok(new
+                        {
+                            message = "Gift card payment processed successfully",
+                            paymentIntentId,
+                            warning = "Email notification could not be sent"
+                        });
+                    }
                 }
                 else
                 {

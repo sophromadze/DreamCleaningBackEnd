@@ -86,6 +86,8 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddHostedService<UnverifiedUserCleanupService>();
 
+builder.Services.AddHttpClient();
+
 
 // CORS Configuration
 builder.Services.AddCors(options =>
