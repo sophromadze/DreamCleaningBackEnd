@@ -67,6 +67,8 @@ namespace DreamCleaningBackend.DTOs
         public DateTime CreatedAt { get; set; }
         public string? Icon { get; set; }
         public string? BadgeColor { get; set; }
+        public decimal? MinimumOrderAmount { get; set; } 
+        public bool RequiresFirstTimeCustomer { get; set; }
     }
 
     // For displaying user's available offers

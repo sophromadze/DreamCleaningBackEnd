@@ -109,27 +109,57 @@ namespace DreamCleaningBackend.Services
 
         public async Task<List<SpecialOfferAdminDto>> GetAllSpecialOffers()
         {
-            return await _context.SpecialOffers
-                .Select(o => new SpecialOfferAdminDto
+            try
+            {
+                // Get all offers first
+                var offers = await _context.SpecialOffers.ToListAsync();
+
+                // Get all user special offers separately
+                var userOfferCounts = await _context.UserSpecialOffers
+                    .GroupBy(uso => uso.SpecialOfferId)
+                    .Select(g => new
+                    {
+                        SpecialOfferId = g.Key,
+                        TotalGranted = g.Count(),
+                        TimesUsed = g.Count(uso => uso.IsUsed)
+                    })
+                    .ToListAsync();
+
+                // Map to DTOs
+                var result = offers.Select(o =>
                 {
-                    Id = o.Id,
-                    Name = o.Name,
-                    Description = o.Description,
-                    IsPercentage = o.IsPercentage,
-                    DiscountValue = o.DiscountValue,
-                    Type = o.Type.ToString(),
-                    ValidFrom = o.ValidFrom,
-                    ValidTo = o.ValidTo,
-                    IsActive = o.IsActive,
-                    Icon = o.Icon,
-                    BadgeColor = o.BadgeColor,
-                    CreatedAt = o.CreatedAt,
-                    TotalUsersGranted = o.UserSpecialOffers.Count,
-                    TimesUsed = o.UserSpecialOffers.Count(uso => uso.IsUsed)
+                    var stats = userOfferCounts.FirstOrDefault(x => x.SpecialOfferId == o.Id);
+
+                    return new SpecialOfferAdminDto
+                    {
+                        Id = o.Id,
+                        Name = o.Name,
+                        Description = o.Description ?? string.Empty,
+                        IsPercentage = o.IsPercentage,
+                        DiscountValue = o.DiscountValue,
+                        Type = o.Type.ToString(),
+                        ValidFrom = o.ValidFrom,
+                        ValidTo = o.ValidTo,
+                        IsActive = o.IsActive,
+                        Icon = o.Icon ?? string.Empty,
+                        BadgeColor = o.BadgeColor ?? "#28a745",
+                        CreatedAt = o.CreatedAt,
+                        MinimumOrderAmount = o.MinimumOrderAmount,
+                        RequiresFirstTimeCustomer = o.RequiresFirstTimeCustomer,
+                        TotalUsersGranted = stats?.TotalGranted ?? 0,
+                        TimesUsed = stats?.TimesUsed ?? 0
+                    };
                 })
                 .OrderBy(o => o.Type)
                 .ThenBy(o => o.Name)
-                .ToListAsync();
+                .ToList();
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error in GetAllSpecialOffers: {ex.Message}", ex);
+            }
         }
 
         public async Task<SpecialOfferAdminDto> GetSpecialOfferById(int id)
